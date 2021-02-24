@@ -1,9 +1,17 @@
-var webdriver = require('selenium-webdriver');
+const {Builder, By, Key, until} = require('selenium-webdriver');
+const chrome = require('selenium-webdriver/chrome');
+const chromedriver = require('chromedriver');
 
-var By = webdriver.By;
+chrome.setDefaultService(new chrome.ServiceBuilder(chromedriver.path).build());
 
-var until = webdriver.until;
+/*
+const screen = {
+  width: 640,
+  height: 480
+};
 
-var driver = new webdriver.Builder().forBrowser('chrome').build();
-
-driver.get('https://www.google.com');
+let driver = new Builder()
+    .forBrowser('chrome')
+    .setChromeOptions(new chrome.Options().headless().windowSize(screen))
+    .build();
+    */
