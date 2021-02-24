@@ -1,6 +1,9 @@
+var webdriver = require('selenium-webdriver');
 
-main();
-async function main()
-{
+var By = webdriver.By;
 
-}
+var until = webdriver.until;
+
+var driver = new webdriver.Builder().forBrowser('chrome').build();
+
+driver.get('https://www.google.com');
