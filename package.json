@@ -1,7 +1,7 @@
 {
   "name": "uggwebscraper",
   "version": "1.0.0",
-  "description": "Scrapes u.gg for champion winrate data",
+  "description": "Scrapes UFC website for winning odds",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,7 +9,7 @@
   "author": "Quentin May",
   "license": "ISC",
   "dependencies": {
-    "chromedriver": "^88.0.0",
-    "selenium-webdriver": "^4.0.0-beta.1"
+    "axios": "^0.21.1",
+    "cheerio": "^1.0.0-rc.5"
   }
 }

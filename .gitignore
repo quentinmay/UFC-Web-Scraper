@@ -1,6 +1,9 @@
 #chromedrive file
 chromedriver.exe
 
+*.json
+*.txt
+
 # Logs
 logs
 *.log
