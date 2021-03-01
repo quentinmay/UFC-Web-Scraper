@@ -12,15 +12,33 @@ try {
 
 class UFC {
 
-    constructor(upComingMatches, previousMatches, lastRefreshed) {
+    async constructor(upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
         if (!upComingMatches) {
-            //search txt file for upComingMatches.
-            //then if text file not found, refresh on its own.
+            try {
+                /*
+                Should read previousMatch.json file and check to see if that match is contained with it first, then just add to the end. Would give a big log of all the previous
+                UFC matches just for safe keeping.
+                */
+                var jsonMatchData = await fs.readFile("../matchData.json");
+                var matchData = await parseMatchDataJson(jsonMatchData);
+                upComingMatches = matchData.upComingMatches;
+                previousMatches = matchData.previousMatches;
+            } catch(err) {
+                await this.refreshUpComingMatches();
+            }
         }
-        // if (!previousMatches) throw new Exception("lastMatches needed"); 
+        if (!outstandingBets) {
+            try {
+                var jsonBets = await fs.readFile("../bets.json");
+                outstandingBets = jsonBets;
+            } catch(err) {
+                outstandingBets = [];
+            }
+        }
         if (!lastRefreshed) lastRefreshed = 0;
         this.upComingMatches = upComingMatches; //List of upcoming matches
         this.previousMatches = previousMatches; //List of previous matches
+        this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
     }
 
@@ -49,16 +67,86 @@ class UFC {
             console.log(data.upComingMatches);
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
+            this.lastRefreshed = Date.now();
             fs.writeFileSync("../matchData.json", JSON.stringify(response.data, null, 2));
         } catch(err) {
             console.log(err);
         }
     }
 
+    async resolveBets() {
+        var resolvedBets = [];
+        for (var bet of this.outstandingBets) {
+            if (Date.now() > bet.fightEventDate) {
+                var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
+                if (fight) {
+                    var winner = null;
+                    var loser = null; 
+                    switch (bet.betType) {
+                        case "classic":
+                            //If the user won. Reference https://www.gamingtoday.com/tools/moneyline/ for calculating winnings
+                            if (user1.fighterName == fight.winner) {
+                                var cashWon = 0;
+                                winner = user1;
+                                //Must use odds saved in the bet data. Sometimes, odds will change, so if we scrape website again, it will have different odds.
+                                if (bet.odds > 0) cashWon = (bet.betAmount * bet.odds / 100);
+                                else if (bet.odds < 0) cashWon = (bet.betAmount / (-1 * bet.odds / 100));
+
+                                //now add cashWon + betAmount to the users account.
+
+                            //If the user lost. Take away his money
+                            } else if (fight.winner != "") { 
+                                loser = user1;
+
+                            //Match was a draw. No one wins. Give back money
+                            } else {
+                                //Give back betAmount to the user.
+                            }
+
+                            break;
+                        case "1v1":
+                            //If there was a winner
+                            if (fight.winner != "") {
+                                winner = [user1, user2].find(user => user.fighterName == fight.winner);
+                                loser = [user1, user2].find(user => user != winner);
+
+                                //Give winner bet.betAmount * 2;
+
+                            //Otherwise, its a draw. No one wins
+                            } else {
+                                
+                            }
+
+                            break;
+                        default:
+                        break;
+                    }
+                    //After all betting is done and over, remove the bet from the list and add it to resolvedBets json.
+                    resolvedBets.push(bet);
+                    //Removes bet from outstandingBets
+                    this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
+
+                }
+
+            }
+        }
+        try {
+            var jsonResolvedBets = await fs.readFile("../resolvedBets.json");
+            jsonResolvedBets.concat(resolvedBets);
+            await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
+        } catch(err) {
+            console.log(err);
+            console.log("Error saving jsonResolvedBets to the json file.")
+        }
+    }
+
+    async resolveBet(bet) {
+
+    }
+
     static async parseMatchDataJson(data) {
         var upComingMatches = [];
         var previousMatches = [];
-        // console.log(data);
         for (var fight of data.matchups) {
             try {
                 if (fight.type == "matchup") {
