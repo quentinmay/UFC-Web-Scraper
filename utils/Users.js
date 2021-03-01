@@ -10,7 +10,7 @@ class Users {
     
     constructor(uuid, userName, balance, currentBets, lastRefreshed) {
         if (!uuid) throw new Exception("UUID needed to create user account."); 
-        if (!userName) userName = null;
+        if (!userName) userName = "Blank Name";
         if (!balance) balance = 0; 
         if (!currentBets) currentBets = []; 
         if (!lastRefreshed) lastRefreshed = Date.now(); 
