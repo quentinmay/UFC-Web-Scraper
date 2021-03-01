@@ -8,6 +8,7 @@ var fs = require('fs');
 getAxiousUFC();
 //
 async function getAxiousUFC() {
+  try {
   const time = Date.now();
   const options = {
     headers: {'authority': "io.oddsshark.com",
@@ -26,10 +27,13 @@ async function getAxiousUFC() {
     'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36"}
   }
   var response = await axios.get(`https://io.oddsshark.com/ticker/ufc?_=${time}`, options)
-  
+
   fs.writeFileSync("matchData.json", JSON.stringify(response.data, null, 2));
   console.log(response.data);
-
+  } catch(err) 
+  {
+    console.log(err);
+  }
 }
 
 //chrome.setDefaultService(new chrome.ServiceBuilder(chromedriver.path).build());
