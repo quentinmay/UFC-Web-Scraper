@@ -66,15 +66,15 @@ class UFC {
 
     async addBet(bet) {
         //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
-        if (this.outstandingBets.find(b => b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid))) {
+        var foundBet = await this.findOutstandingBet(bet.betType, bet.user1, bet.user2);
+        if (foundBet) {
             console.log("Error: bet of this type already exists with this player/s");
             return false;
-    }else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
+    } else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
         console.log("Error: tried to make bet on a fight that is already over");
         return false;
         } else
         {
-
             try {
                 this.outstandingBets.push(bet);
                 console.log("adding new bet")
@@ -86,12 +86,44 @@ class UFC {
             }
             return true;
         }
+    }
 
 
-    
+    async cancelBet(betType, user1, user2) {
+        try {
+            var bet = await this.findOutstandingBet(betType, user1, user2);
+            if (bet) {
+                this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
+                await this.writeBetsToFile();
+                return true;
+            } else {
+                console.log("Bet to delete wasn't found.");
+                return false;
+            }
+        } catch (err) {
+            console.log(err)
+            return false;
+        }
 
     }
 
+
+    async findOutstandingBet(betType, user1, user2) {
+        var foundBet = null;
+        if (betType == "classic") {
+            // console.log(`${user1.uuid}`);
+            // console.log(this.outstandingBets);
+            foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.user1.uuid == user1.uuid));
+            // console.log(foundBet);
+        } else if (betType == "1v1") {
+            foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.user1.uuid == user1.uuid && b.user2.user2.uuid == user2.uuid) || b.user1.user1.uuid == user2.uuid && b.user2.user2.uuid == user1.uuid));
+        }
+        if (foundBet) {
+            console.log("found bet");
+            return foundBet;
+        }else
+            return null;
+    }
     /*
     Loops through all existing bets within outstandingBets file to find all the bets that SHOULD be ready to be completed. If the fight is within previousMatches (over
     and decision exists), resolves the bet from there. If not, doesnt do anything.
@@ -148,15 +180,16 @@ class UFC {
                     resolvedBets.push(bet);
                     //Removes bet from outstandingBets
                     this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
-
                 }
 
             }
         }
+        //Want to write all this to file since weve updated and resolved alot of bets;
         try {
             var jsonResolvedBets = JSON.parse(await fs.readFile("../resolvedBets.json"));
             jsonResolvedBets.concat(resolvedBets);
             await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
+            await this.writeBetsToFile();
         } catch(err) {
             console.log(err);
             console.log("Error saving jsonResolvedBets to the json file.")
@@ -164,6 +197,16 @@ class UFC {
     }
 
 
+    async writeBetsToFile() {
+        console.log("Write Bets To File");
+        try {
+            await fs.writeFile("../bets.json", JSON.stringify(this.outstandingBets, null, 2));
+            return true;
+        } catch(err) {
+            console.log(err);
+            return false;
+        }
+    }
     static async parseMatchDataJson(data) {
         try {
         var upComingMatches = [];
@@ -202,7 +245,10 @@ async function main() {
     await test.refreshUpComingMatches();
     // console.log(test.upComingMatches);
     // console.log(test.previousMatches);
-    await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
+    // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
+    // await test.addBet(new Bet("classic", 300, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, null, {user1: "125", user2: null} ))
+    await test.cancelBet("classic", john, null);
+    
     console.log(test.outstandingBets);
 }
 
