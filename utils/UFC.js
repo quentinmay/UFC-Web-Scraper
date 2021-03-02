@@ -1,14 +1,7 @@
 var configFile = __dirname + "/../users.json";
 var axios = require("axios")
 var fs = require("fs")
-var datefns = require("date-fns")
 
-try {
-   // var config = require(configFile);
-
-  } catch (err) {
-     // console.log(err)
-  }
 
 class UFC {
 
