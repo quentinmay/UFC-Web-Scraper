@@ -1,24 +1,30 @@
 var configFile = __dirname + "/../users.json";
 var axios = require("axios")
-var fs = require("fs")
+var fs = require("fs").promises;
 
 
 class UFC {
 
-    async constructor(upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
+    constructor(upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
         if (!upComingMatches) {
             try {
-                var jsonMatchData = await fs.readFile("../matchData.json");
-                var matchData = await parseMatchDataJson(jsonMatchData);
-                upComingMatches = matchData.upComingMatches;
-                previousMatches = matchData.previousMatches;
+                fs.readFile("../matchData.json", function(err, jsonMatchData) {
+                    jsonMatchData = JSON.parse(jsonMatchData);
+                    UFC.parseMatchDataJson(jsonMatchData).then(function(matchData) {
+                        upComingMatches = matchData.upComingMatches;
+                        previousMatches = matchData.previousMatches;
+                    });
+
+                });
+
             } catch(err) {
-                await this.refreshUpComingMatches();
+                this.refreshUpComingMatches();
             }
         }
         if (!outstandingBets) {
             try {
-                var jsonBets = await fs.readFile("../bets.json");
+                var jsonBets = JSON.parse(fs.readFileSync("../bets.json"));
+                
                 outstandingBets = jsonBets;
             } catch(err) {
                 outstandingBets = [];
@@ -53,10 +59,10 @@ class UFC {
             }
             var response = await axios.get(`https://io.oddsshark.com/ticker/ufc?_=${time}`, options)
             var data = await UFC.parseMatchDataJson(response.data)
-            console.log(data.upComingMatches);
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
+            console.log(this.previousMatches);
             await fs.writeFile("../matchData.json", JSON.stringify(response.data, null, 2));
             await fs.writeFile("../previousMatches.json", JSON.stringify(this.previousMatches, null, 2));
             
@@ -122,7 +128,7 @@ class UFC {
             }
         }
         try {
-            var jsonResolvedBets = await fs.readFile("../resolvedBets.json");
+            var jsonResolvedBets = JSON.parse(await fs.readFile("../resolvedBets.json"));
             jsonResolvedBets.concat(resolvedBets);
             await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
         } catch(err) {
@@ -133,8 +139,10 @@ class UFC {
 
 
     static async parseMatchDataJson(data) {
+        try {
         var upComingMatches = [];
-        var previousMatches = await fs.readFile("../previousMatches.json");
+        var previousMatches = JSON.parse(await fs.readFile("../previousMatches.json"));
+        console.log(previousMatches);
         for (var fight of data.matchups) {
             try {
                 if (fight.type == "matchup") {
@@ -144,7 +152,7 @@ class UFC {
                             upComingMatches.push(fight);
                         }
                     } else {
-                        if (!jsonPreviousMatches.find(match => match.event_id == fight.event_id))
+                        if (!previousMatches.find(match => match.event_id == fight.event_id))
                             previousMatches.push(fight);
                     }
                 }
@@ -154,7 +162,12 @@ class UFC {
             }
         }
         return {upComingMatches: upComingMatches, previousMatches: previousMatches}
+    }catch(err) {
+        console.log(err);
+        return null;
     }
+
+}
 }
 var swag = new UFC();
 swag.refreshUpComingMatches();
