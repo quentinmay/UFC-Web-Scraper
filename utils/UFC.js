@@ -15,10 +15,6 @@ class UFC {
     async constructor(upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
         if (!upComingMatches) {
             try {
-                /*
-                Should read previousMatch.json file and check to see if that match is contained with it first, then just add to the end. Would give a big log of all the previous
-                UFC matches just for safe keeping.
-                */
                 var jsonMatchData = await fs.readFile("../matchData.json");
                 var matchData = await parseMatchDataJson(jsonMatchData);
                 upComingMatches = matchData.upComingMatches;
@@ -36,8 +32,8 @@ class UFC {
             }
         }
         if (!lastRefreshed) lastRefreshed = 0;
-        this.upComingMatches = upComingMatches; //List of upcoming matches
-        this.previousMatches = previousMatches; //List of previous matches
+        if (upComingMatches) this.upComingMatches = upComingMatches; //List of upcoming matches
+        if (previousMatches) this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
     }
@@ -68,7 +64,9 @@ class UFC {
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
-            fs.writeFileSync("../matchData.json", JSON.stringify(response.data, null, 2));
+            await fs.writeFile("../matchData.json", JSON.stringify(response.data, null, 2));
+            await fs.writeFile("../previousMatches.json", JSON.stringify(this.previousMatches, null, 2));
+            
         } catch(err) {
             console.log(err);
         }
@@ -140,13 +138,10 @@ class UFC {
         }
     }
 
-    async resolveBet(bet) {
-
-    }
 
     static async parseMatchDataJson(data) {
         var upComingMatches = [];
-        var previousMatches = [];
+        var previousMatches = await fs.readFile("../previousMatches.json");
         for (var fight of data.matchups) {
             try {
                 if (fight.type == "matchup") {
@@ -156,7 +151,8 @@ class UFC {
                             upComingMatches.push(fight);
                         }
                     } else {
-                        previousMatches.push(fight);
+                        if (!jsonPreviousMatches.find(match => match.event_id == fight.event_id))
+                            previousMatches.push(fight);
                     }
                 }
         } catch (err) {

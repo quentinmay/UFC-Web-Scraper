@@ -6,7 +6,7 @@ try {
   } catch (err) {
      // console.log(err)
   }
-class Users {
+class User {
     
     constructor(uuid, userName, balance, currentBets, lastRefreshed) {
         if (!uuid) throw new Exception("UUID needed to create user account."); 
@@ -24,4 +24,4 @@ class Users {
 
 }
 
-module.exports = Users;
+module.exports = User;

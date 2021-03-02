@@ -12,6 +12,7 @@ class Bet {
         if (!betResolved) betResolved = false; 
 
         this.betType = betType; //Classic or 1v1. Classic is for odds vs the UFC website. 1v1 is for straight 1v1 for player to player (Ex. $50 from player1 and $50 from player2)
+        this.betAmount = betAmount;
         this.fightEventID = fightEventID; //Unique ID assigned from the UFC website for each match..
         this.fightEventDate = fightEventDate; //Date of the fight.
         this.user1 = user1; //Ex. {User 1, fighterName}. Necessary
