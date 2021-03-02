@@ -12,9 +12,9 @@ class UFC {
         }
         if (!outstandingBets) {
             try {
-                var jsonBets = JSON.parse(fs.readFileSync("../bets.json"));
-                
+                var jsonBets = JSON.parse(file.readFileSync("../bets.json"));
                 outstandingBets = jsonBets;
+                console.log("Successfully read bets.json for outstandingBets.");
             } catch(err) {
                 outstandingBets = [];
             }
@@ -66,14 +66,24 @@ class UFC {
 
     async addBet(bet) {
         //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
-        if (this.outstandingBets.find(b => b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid)))
-            throw new Exception("Error: tried to have bet between ");
-        else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
-            throw new Exception("Error: tried to make bet on a fight that is already over");
+        if (this.outstandingBets.find(b => b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid))) {
+            console.log("Error: bet of this type already exists with this player/s");
+            return false;
+    }else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
+        console.log("Error: tried to make bet on a fight that is already over");
+        return false;
         } else
         {
-            this.outstandingBets.push(bet);
-            console.log("adding new bet")
+
+            try {
+                this.outstandingBets.push(bet);
+                console.log("adding new bet")
+                await fs.writeFile("../bets.json", JSON.stringify(this.outstandingBets, null, 2));
+            } catch(err) {
+                console.log(err);
+                console.log("Failed to add to outstandingBets")
+                return false;
+            }
             return true;
         }
 
