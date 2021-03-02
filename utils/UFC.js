@@ -1,25 +1,14 @@
-var configFile = __dirname + "/../users.json";
-var axios = require("axios")
+var axios = require("axios");
+var Bet = require("./Bet.js");
+var User = require("./User.js");
 var fs = require("fs").promises;
+var file = require("fs");
 
 
 class UFC {
 
     constructor(upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
         if (!upComingMatches) {
-            try {
-                fs.readFile("../matchData.json", function(err, jsonMatchData) {
-                    jsonMatchData = JSON.parse(jsonMatchData);
-                    UFC.parseMatchDataJson(jsonMatchData).then(function(matchData) {
-                        upComingMatches = matchData.upComingMatches;
-                        previousMatches = matchData.previousMatches;
-                    });
-
-                });
-
-            } catch(err) {
-                this.refreshUpComingMatches();
-            }
         }
         if (!outstandingBets) {
             try {
@@ -31,13 +20,17 @@ class UFC {
             }
         }
         if (!lastRefreshed) lastRefreshed = 0;
-        if (upComingMatches) this.upComingMatches = upComingMatches; //List of upcoming matches
-        if (previousMatches) this.previousMatches = previousMatches; //List of previous matches
+        this.upComingMatches = upComingMatches; //List of upcoming matches
+        this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
     }
 
+    /*
+    Webscrapes oddshark UFC website for match data.
+    Refreshes the match data. Gets all upComingMatches and populates the datasection with those. Then gets all previousMatches and updates the json as well as data section
     
+    */
     async refreshUpComingMatches() {
         try {
             const time = Date.now();
@@ -62,7 +55,7 @@ class UFC {
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
-            console.log(this.previousMatches);
+            // console.log(this.previousMatches);
             await fs.writeFile("../matchData.json", JSON.stringify(response.data, null, 2));
             await fs.writeFile("../previousMatches.json", JSON.stringify(this.previousMatches, null, 2));
             
@@ -71,6 +64,28 @@ class UFC {
         }
     }
 
+    async addBet(bet) {
+        //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
+        if (this.outstandingBets.find(b => b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid)))
+            throw new Exception("Error: tried to have bet between ");
+        else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
+            throw new Exception("Error: tried to make bet on a fight that is already over");
+        } else
+        {
+            this.outstandingBets.push(bet);
+            console.log("adding new bet")
+            return true;
+        }
+
+
+    
+
+    }
+
+    /*
+    Loops through all existing bets within outstandingBets file to find all the bets that SHOULD be ready to be completed. If the fight is within previousMatches (over
+    and decision exists), resolves the bet from there. If not, doesnt do anything.
+    */
     async resolveBets() {
         var resolvedBets = [];
         for (var bet of this.outstandingBets) {
@@ -86,8 +101,8 @@ class UFC {
                                 var cashWon = 0;
                                 winner = user1;
                                 //Must use odds saved in the bet data. Sometimes, odds will change, so if we scrape website again, it will have different odds.
-                                if (bet.odds > 0) cashWon = (bet.betAmount * bet.odds / 100);
-                                else if (bet.odds < 0) cashWon = (bet.betAmount / (-1 * bet.odds / 100));
+                                if (bet.odds > 0) cashWon = (bet.betAmount * bet.odds.user1 / 100);
+                                else if (bet.odds < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
 
                                 //now add cashWon + betAmount to the users account.
 
@@ -119,6 +134,7 @@ class UFC {
                         break;
                     }
                     //After all betting is done and over, remove the bet from the list and add it to resolvedBets json.
+                    bet.betResolved = true;
                     resolvedBets.push(bet);
                     //Removes bet from outstandingBets
                     this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
@@ -142,7 +158,6 @@ class UFC {
         try {
         var upComingMatches = [];
         var previousMatches = JSON.parse(await fs.readFile("../previousMatches.json"));
-        console.log(previousMatches);
         for (var fight of data.matchups) {
             try {
                 if (fight.type == "matchup") {
@@ -169,7 +184,17 @@ class UFC {
 
 }
 }
-var swag = new UFC();
-swag.refreshUpComingMatches();
+main();
+async function main() {
+    var test = new UFC();
+    var john = new User(1234, "john", 1000);
+    var bob = new User(9876, "bob", 1000);
+    await test.refreshUpComingMatches();
+    // console.log(test.upComingMatches);
+    // console.log(test.previousMatches);
+    await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
+    console.log(test.outstandingBets);
+}
+
 
 module.exports = UFC;
