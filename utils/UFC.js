@@ -7,7 +7,16 @@ var file = require("fs");
 
 class UFC {
 
-    constructor(upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
+    constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
+        if (!users) {
+            try {
+                var jsonUsers = JSON.parse(file.readFileSync("../users.json"));
+                users = jsonUsers;
+                console.log("Successfully read users.json for user data.");
+            } catch(err) {
+                users = [];
+            }
+        }
         if (!upComingMatches) {
         }
         if (!outstandingBets) {
@@ -20,6 +29,7 @@ class UFC {
             }
         }
         if (!lastRefreshed) lastRefreshed = 0;
+        this.users = users; //List of users
         this.upComingMatches = upComingMatches; //List of upcoming matches
         this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
@@ -64,35 +74,51 @@ class UFC {
         }
     }
 
+
+    async addUser(uuid, name) {
+        //If there is a user that exists with this UUID
+        if (this.users.find(user => user.uuid == uuid)) {
+            console.log("User already exists with this UUID.");
+            return false;
+        } else {
+            this.users.push(new User(uuid, name)); //The rest will be autofilled from the constructor.
+            console.log("Adding new user.");
+            await this.writeUsersToFile();
+            return true;
+        }
+        }
+
     async addBet(bet) {
         //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
         var foundBet = await this.findOutstandingBet(bet.betType, bet.user1, bet.user2);
         if (foundBet) {
             console.log("Error: bet of this type already exists with this player/s");
             return false;
-    } else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
-        console.log("Error: tried to make bet on a fight that is already over");
-        return false;
-        } else
-        {
-            try {
-                this.outstandingBets.push(bet);
-                console.log("adding new bet")
-                await fs.writeFile("../bets.json", JSON.stringify(this.outstandingBets, null, 2));
-            } catch(err) {
-                console.log(err);
-                console.log("Failed to add to outstandingBets")
-                return false;
+        } else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
+            console.log("Error: tried to make bet on a fight that is already over");
+            return false;
+            } else
+            {
+                try {
+                    this.outstandingBets.push(bet);
+                    console.log("Adding new bet")
+                    await this.writeBetsToFile();
+                    return true;
+                } catch(err) {
+                    console.log(err);
+                    console.log("Failed to add to outstandingBets")
+                    return false;
+                }
+                
             }
-            return true;
         }
-    }
 
 
     async cancelBet(betType, user1, user2) {
         try {
             var bet = await this.findOutstandingBet(betType, user1, user2);
             if (bet) {
+                console.log("Cancelling bet");
                 this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
                 await this.writeBetsToFile();
                 return true;
@@ -119,7 +145,6 @@ class UFC {
             foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.user1.uuid == user1.uuid && b.user2.user2.uuid == user2.uuid) || b.user1.user1.uuid == user2.uuid && b.user2.user2.uuid == user1.uuid));
         }
         if (foundBet) {
-            console.log("found bet");
             return foundBet;
         }else
             return null;
@@ -190,13 +215,43 @@ class UFC {
             jsonResolvedBets.concat(resolvedBets);
             await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
             await this.writeBetsToFile();
+            return true;
         } catch(err) {
+            return false;
             console.log(err);
             console.log("Error saving jsonResolvedBets to the json file.")
         }
     }
 
+    async addMoney(uuid, moneyGiven) {
+        try {
+            var user = this.users.find(user => user.uuid == uuid);
+            user.balance = user.balance + moneyGiven;
+            await this.writeUsersToFile();
+            return true;
+        } catch(err) {
+            console.log(err)
+            return false;
+        }
+    }
 
+    async takeMoney(uuid, moneyTaken) {
+        try {
+            var user = this.users.find(user => user.uuid == uuid);
+            if (user.balance - moneyTaken < 0) throw new Exception("User balance can't fall below 0");
+            user.balance = user.balance - moneyTaken;
+            await this.writeUsersToFile();
+            return true;
+        } catch(err) {
+            console.log(err)
+            return false;
+        }
+    }
+
+    /*
+    Function that saves our outstandingBets datasection to file so that we can read from file anytime we boot.
+    This function should get called anytime we make changes to the outstandingBets.
+    */
     async writeBetsToFile() {
         console.log("Write Bets To File");
         try {
@@ -207,6 +262,21 @@ class UFC {
             return false;
         }
     }
+
+    async writeUsersToFile() {
+        console.log("Write Users To File");
+        try {
+            await fs.writeFile("../users.json", JSON.stringify(this.users, null, 2));
+            return true;
+        } catch(err) {
+            console.log(err);
+            return false;
+        }
+    }
+
+    /*
+    Parses the matchData from the UFC json data that we receive. return it as {upcomingMatches, previousMatches} but previousMatches has ALL past saved matches.
+    */
     static async parseMatchDataJson(data) {
         try {
         var upComingMatches = [];
@@ -240,16 +310,18 @@ class UFC {
 main();
 async function main() {
     var test = new UFC();
-    var john = new User(1234, "john", 1000);
-    var bob = new User(9876, "bob", 1000);
+    test.addUser(123, "john");
+    test.addUser(456, "bob");
+    test.takeMoney(456, 777)
+    test.addMoney(123, 999);
+   
     await test.refreshUpComingMatches();
     // console.log(test.upComingMatches);
     // console.log(test.previousMatches);
     // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
     // await test.addBet(new Bet("classic", 300, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, null, {user1: "125", user2: null} ))
-    await test.cancelBet("classic", john, null);
-    
-    console.log(test.outstandingBets);
+    // await test.cancelBet("classic", john, null);
+    // console.log(test.outstandingBets);
 }
 
 
