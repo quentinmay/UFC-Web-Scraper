@@ -151,23 +151,21 @@ class UFC {
     and decision exists), resolves the bet from there. If not, doesnt do anything.
     */
     async resolveBets() {
-        console.log("resolving bets");
         var resolvedBets = [];
+        console.log('resolve bets');
         for (var bet of this.outstandingBets) {
-            console.log("trying bet");
-            if (Date.now() > bet.fightEventDate) {
-                console.log('date passed')
+            if (Date.now() > bet.fightEventDate) { //If we passed the bets fight date. Then we want to check the completion of the fight
                 var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
                 if (fight) {
                     var winner = null;
                     var loser = null; 
                     switch (bet.betType) {
                         case "classic":
-                            // console.log(bet);
+
                             //If the user won. Reference https://www.gamingtoday.com/tools/moneyline/ for calculating winnings
                             if (bet.user1.fighterName == fight.winner) {
                                 var cashWon = 0;
-                                winner = user1;
+                                winner = bet.user1.user1;
                                 //Must use odds saved in the bet data. Sometimes, odds will change, so if we scrape website again, it will have different odds.
                                 if (bet.odds > 0) cashWon = (bet.betAmount * bet.odds.user1 / 100);
                                 else if (bet.odds < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
@@ -176,7 +174,7 @@ class UFC {
                                 console.log("classic won: " + cashWon);
                             //If the user lost. Take away his money
                             } else if (fight.winner != "") { 
-                                loser = user1;
+                                loser = bet.user1.user1;
                                 console.log("classic lose");
 
                             //Match was a draw. No one wins. Give back money
@@ -214,9 +212,10 @@ class UFC {
         }
         //Want to write all this to file since weve updated and resolved alot of bets;
         try {
+            // console.log(resolvedBets.length);
             if (resolvedBets.length > 0) {
                 var jsonResolvedBets = JSON.parse(await fs.readFile("../resolvedBets.json"));
-                jsonResolvedBets.concat(resolvedBets);
+                jsonResolvedBets = jsonResolvedBets.concat(resolvedBets);
                 await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
                 await this.writeBetsToFile();
             }
@@ -360,18 +359,18 @@ async function main() {
     // console.log(test.previousMatches)
     // console.log(test.upComingMatches.length);
     // console.log(test.previousMatches.length);
-    var john = await test.findUser(123);
+    var john = await test.findUser(1234);
     // var fight = test.getFight()
     // test.addUser(123, "john");
     // test.addUser(456, "bob");
-        // console.log(test.outstandingBets);
+    // console.log(test.outstandingBets);
     // test.takeMoney(456, 777)
     // test.addMoney(123, 4);
     // await test.refreshUpComingMatches();
     // console.log(test.upComingMatches);
     // console.log(test.previousMatches);
     // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
-    // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user1: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
+        // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user1: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
     await test.resolveBets();
     // await test.cancelBet("classic", john, null);
     // console.log(test.outstandingBets);
