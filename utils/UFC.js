@@ -18,6 +18,19 @@ class UFC {
             }
         }
         if (!upComingMatches) {
+            /*
+            try {
+                var matchData = JSON.parse(file.readFileSync("../matchData.json"));
+                var data = UFC.parseMatchDataJson(matchData)
+                upComingMatches = data.upComingMatches;
+                previousMatches = data.previousMatches;
+                lastRefreshed = Date.now();
+                console.log("Successfully read matchData.json for upComingMatches and previousMatches.");
+            } catch(err) {
+                upComingMatches = null;
+                previousMatches = null;
+            }
+*/
         }
         if (!outstandingBets) {
             try {
@@ -28,18 +41,20 @@ class UFC {
                 outstandingBets = [];
             }
         }
+        
         if (!lastRefreshed) lastRefreshed = 0;
         this.users = users; //List of users
         this.upComingMatches = upComingMatches; //List of upcoming matches
         this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
+        console.log(this.upComingMatches);
+        if (!this.upComingMatches) this.refreshUpComingMatches(); 
     }
 
     /*
     Webscrapes oddshark UFC website for match data.
     Refreshes the match data. Gets all upComingMatches and populates the datasection with those. Then gets all previousMatches and updates the json as well as data section
-    
     */
     async refreshUpComingMatches() {
         try {
@@ -217,9 +232,10 @@ class UFC {
             await this.writeBetsToFile();
             return true;
         } catch(err) {
-            return false;
             console.log(err);
             console.log("Error saving jsonResolvedBets to the json file.")
+            return false;
+
         }
     }
 
@@ -238,7 +254,7 @@ class UFC {
     async takeMoney(uuid, moneyTaken) {
         try {
             var user = this.users.find(user => user.uuid == uuid);
-            if (user.balance - moneyTaken < 0) throw new Exception("User balance can't fall below 0");
+            if (user.balance - moneyTaken < 0) throw new Error("User balance can't fall below 0");
             user.balance = user.balance - moneyTaken;
             await this.writeUsersToFile();
             return true;
@@ -310,12 +326,12 @@ class UFC {
 main();
 async function main() {
     var test = new UFC();
-    test.addUser(123, "john");
-    test.addUser(456, "bob");
-    test.takeMoney(456, 777)
-    test.addMoney(123, 999);
-   
-    await test.refreshUpComingMatches();
+    // test.addUser(123, "john");
+    // test.addUser(456, "bob");
+        // console.log(test.outstandingBets);
+    // test.takeMoney(456, 777)
+    // test.addMoney(123, 999);
+    // await test.refreshUpComingMatches();
     // console.log(test.upComingMatches);
     // console.log(test.previousMatches);
     // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))

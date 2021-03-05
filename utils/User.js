@@ -9,7 +9,7 @@ try {
 class User {
     
     constructor(uuid, userName, balance, currentBets, lastRefreshed) {
-        if (!uuid) throw new Exception("UUID needed to create user account."); 
+        if (!uuid) throw new Error("UUID needed to create user account."); 
         if (!userName) userName = "Blank Name";
         if (!balance) balance = 0; 
         if (!currentBets) currentBets = []; 
