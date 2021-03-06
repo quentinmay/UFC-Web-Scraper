@@ -75,6 +75,9 @@ class UFC {
         }
     }
 
+    /*
+    Uses hardcoded text file paths and checks to see if they exist then creates those files if they dont
+    */
     async checkFiles() {
         var files = ["../resolvedBets.json", "../matchData.json", "../users.json", "../previousMatches.json", "../bets.json"];
         for (var file of files) {
@@ -153,15 +156,16 @@ class UFC {
     async findOutstandingBet(betType, user1, user2) {
         var foundBet = null;
         if (betType == "classic") {
-            foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.user1.uuid == user1.user1.uuid));
+            foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.user.uuid == user1.user.uuid));
         } else if (betType == "1v1") {
-            foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.user1.uuid == user1.user1.uuid && b.user2.user2.uuid == user2.user2.uuid) || b.user1.user1.uuid == user2.user2.uuid && b.user2.user2.uuid == user1.user1.uuid));
+            foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.user.uuid == user1.user.uuid && b.user2.user.uuid == user2.user.uuid) || b.user1.user.uuid == user2.user.uuid && b.user2.user.uuid == user1.user.uuid));
         }
         if (foundBet) {
             return foundBet;
         }else
             return null;
     }
+
     /*
     Loops through all existing bets within outstandingBets file to find all the bets that SHOULD be ready to be completed. If the fight is within previousMatches (over
     and decision exists), resolves the bet from there. If not, doesnt do anything.
@@ -181,38 +185,41 @@ class UFC {
                             //If the user won. Reference https://www.gamingtoday.com/tools/moneyline/ for calculating winnings
                             if (bet.user1.fighterName == fight.winner) {
                                 var cashWon = 0;
-                                winner = bet.user1.user1;
-                                console.log(bet.betAmount)
-                                console.log(bet.odds.user1)
+                                winner = bet.user1.user;
                                 //Must use odds saved in the bet data. Sometimes, odds will change, so if we scrape website again, it will have different odds.
                                 if (bet.odds.user1 > 0) cashWon = (bet.betAmount * bet.odds.user1 / 100);
                                 else if (bet.odds.user1 < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
 
                                 //now add cashWon + betAmount to the users account.
                                 console.log("classic won: " + cashWon);
-                            //If the user lost. Take away his money
+                                this.addMoney(winner.uuid, (cashWon + bet.betAmount));
+
+                            //If the user lost. Don't give any money. We've already taken money from their account
                             } else if (fight.winner != "") { 
-                                loser = bet.user1.user1;
+                                loser = bet.user1.user;
                                 console.log("classic lose");
 
                             //Match was a draw. No one wins. Give back money
                             } else {
                                 //Give back betAmount to the user.
                                 console.log("classic draw");
+                                this.addMoney(bet.user1.user.uuid, bet.betAmount);
                             }
 
                             break;
                         case "1v1":
                             //If there was a winner
                             if (fight.winner != "") {
-                                winner = [user1, user2].find(user => user.fighterName == fight.winner);
-                                loser = [user1, user2].find(user => user != winner);
+                                winner = [bet.user1, bet.user2].find(user => user.fighterName == fight.winner);
+                                loser = [bet.user1, bet.user2].find(user => user != winner);
 
                                 //Give winner bet.betAmount * 2;
+                                this.addMoney(winner.user.uuid, (bet.betAmount * 2))
 
-                            //Otherwise, its a draw. No one wins
+                            //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
-                                
+                                this.addMoney(bet.user1.user.uuid, bet.betAmount)
+                                this.addMoney(bet.user2.user.uuid, bet.betAmount)
                             }
 
                             break;
@@ -236,11 +243,12 @@ class UFC {
                 jsonResolvedBets = jsonResolvedBets.concat(resolvedBets);
                 await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
                 await this.writeBetsToFile();
+                await this.writeUsersToFile();
             }
             return true;
         } catch(err) {
             console.log(err);
-            console.log("Error saving jsonResolvedBets to the json file.")
+            console.log("Error saving jsonResolvedBets/Users to the json file.")
             return false;
 
         }
@@ -291,7 +299,6 @@ class UFC {
         }
     }
 
-    
 
     /*
     Function that saves our outstandingBets datasection to file so that we can read from file anytime we boot.
@@ -389,6 +396,7 @@ async function main() {
     // console.log(test.upComingMatches.length);
     // console.log(test.previousMatches.length);
     var john = await test.findUser(1234);
+    // var bob = await test.findUser(456);
     // var fight = test.getFight()
     // test.addUser(123, "john");
     // test.addUser(456, "bob");
@@ -398,8 +406,8 @@ async function main() {
     // await test.refreshUpComingMatches();
     // console.log(test.upComingMatches);
     // console.log(test.previousMatches);
-    // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
-    // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user1: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
+    // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user: john, fighterName:"M Nicolau"}, {user: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
+    // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
     await test.resolveBets();
     // await test.cancelBet("classic", john, null);
     // console.log(test.outstandingBets);
