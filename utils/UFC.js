@@ -35,6 +35,7 @@ class UFC {
         this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
+        this.checkFiles(); //Just checks to see if all the necessary json files are made.
     }
 
     /*
@@ -74,6 +75,17 @@ class UFC {
         }
     }
 
+    async checkFiles() {
+        var files = ["../resolvedBets.json", "../matchData.json", "../users.json", "../previousMatches.json", "../bets.json"];
+        for (var file of files) {
+            try {
+                await fs.readFile(file);
+            } catch(err) {
+                console.log(`${file} not found. Generating new blank file.`)
+                fs.writeFile(file, "[]")
+            }
+        }
+    }
 
     async addUser(uuid, name) {
         //If there is a user that exists with this UUID
@@ -113,7 +125,9 @@ class UFC {
             }
         }
 
-
+    /*
+    Finds the outstanding bet that you want and deletes that bet then writes it to file to ensure its definitely gone.
+    */
     async cancelBet(betType, user1, user2) {
         try {
             var bet = await this.findOutstandingBet(betType, user1, user2);
@@ -133,7 +147,9 @@ class UFC {
 
     }
 
-
+    /* 
+    Utility function to find certain outstanding bets.
+    */
     async findOutstandingBet(betType, user1, user2) {
         var foundBet = null;
         if (betType == "classic") {
@@ -166,9 +182,11 @@ class UFC {
                             if (bet.user1.fighterName == fight.winner) {
                                 var cashWon = 0;
                                 winner = bet.user1.user1;
+                                console.log(bet.betAmount)
+                                console.log(bet.odds.user1)
                                 //Must use odds saved in the bet data. Sometimes, odds will change, so if we scrape website again, it will have different odds.
-                                if (bet.odds > 0) cashWon = (bet.betAmount * bet.odds.user1 / 100);
-                                else if (bet.odds < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
+                                if (bet.odds.user1 > 0) cashWon = (bet.betAmount * bet.odds.user1 / 100);
+                                else if (bet.odds.user1 < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
 
                                 //now add cashWon + betAmount to the users account.
                                 console.log("classic won: " + cashWon);
@@ -256,6 +274,10 @@ class UFC {
             return false;
         }
     }
+
+    /*
+    Simple function to remove money from a Users account and write that to file.
+    */
     async takeMoney(uuid, moneyTaken) {
         try {
             var user = this.users.find(user => user.uuid == uuid);
@@ -306,6 +328,9 @@ class UFC {
         }
     }
 
+    /*
+    Retrieves a fight depending the fightEventID, which is the unique ID given to every fight.
+    */
     async getFight(fightEventID) {
         try {
             return this.upComingMatches.find(match => match.event_id == fightEventID);
@@ -327,6 +352,7 @@ class UFC {
 
 
                 if (fight.type == "matchup") {
+                    //Starts by fixing unformated dates. Puts them in milliseconds form for easier use.
                     var date = Date.parse(fight.event_date);
                     if (isNaN(date)) date = Date.now();
                     fight.event_date = date;
@@ -353,6 +379,9 @@ class UFC {
 }
 }
 main();
+/*
+Test function
+*/
 async function main() {
     var test = new UFC();
     await test.loadFromFile();
@@ -370,7 +399,7 @@ async function main() {
     // console.log(test.upComingMatches);
     // console.log(test.previousMatches);
     // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user1: john, fighterName:"M Nicolau"}, {user2: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
-        // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user1: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
+    // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user1: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
     await test.resolveBets();
     // await test.cancelBet("classic", john, null);
     // console.log(test.outstandingBets);

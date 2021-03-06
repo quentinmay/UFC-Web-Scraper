@@ -1,11 +1,3 @@
-var configFile = __dirname + "/../users.json";
-
-try {
-   // var config = require(configFile);
-
-  } catch (err) {
-     // console.log(err)
-  }
 class User {
     
     constructor(uuid, userName, balance, currentBets, lastRefreshed) {
