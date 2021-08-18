@@ -1,15 +1,18 @@
 {
-  "name": "uggwebscraper",
-  "version": "1.0.0",
-  "description": "Scrapes UFC website for winning odds",
-  "main": "index.js",
+  "name": "ufc-betting-game",
+  "version": "1.0.5",
+  "description": "UFC betting game",
+  "main": "./utils/UFC.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quentinmay/UFC-Web-Scraper.git"
   },
   "author": "Quentin May",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.21.1",
-    "cheerio": "^1.0.0-rc.5"
+    "axios": "^0.21.1"
   }
 }

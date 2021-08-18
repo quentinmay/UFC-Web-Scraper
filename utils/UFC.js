@@ -10,10 +10,11 @@ class UFC {
     constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
         if (!users) {
             try {
-                var jsonUsers = JSON.parse(file.readFileSync("../users.json"));
+                // "./node_modules/ufc-betting-game/utils/"
+                var jsonUsers = JSON.parse(file.readFileSync(`${__dirname}/../../../users.json`));
                 users = jsonUsers;
                 console.log("Successfully read users.json for user data.");
-            } catch(err) {
+            } catch (err) {
                 users = [];
             }
         }
@@ -21,14 +22,14 @@ class UFC {
         }
         if (!outstandingBets) {
             try {
-                var jsonBets = JSON.parse(file.readFileSync("../bets.json"));
+                var jsonBets = JSON.parse(file.readFileSync(`${__dirname}/../../../bets.json`));
                 outstandingBets = jsonBets;
                 console.log("Successfully read bets.json for outstandingBets.");
-            } catch(err) {
+            } catch (err) {
                 outstandingBets = [];
             }
         }
-        
+
         if (!lastRefreshed) lastRefreshed = 0;
         this.users = users; //List of users
         this.upComingMatches = upComingMatches; //List of upcoming matches
@@ -46,30 +47,32 @@ class UFC {
         try {
             const time = Date.now();
             const options = {
-                headers: {'authority': "io.oddsshark.com",
-                'method': "GET",
-                'path': `/ticker/ufc?_=${time}`,
-                'scheme': "https",
-                'accept': "*/*",
-                'accept-encoding': "gzip, deflate, br",
-                'accept-language': "en-US,en;q=0.9,ja;q=0.8",
-                'dnt': "1",
-                'origin': "https://www.oddsshark.com",
-                'referer': "https://www.oddsshark.com/",
-                'sec-fetch-dest': "empty",
-                'sec-fetch-mode': "cors",
-                'sec-fetch-site': "same-site",
-                'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36"}
+                headers: {
+                    'authority': "io.oddsshark.com",
+                    'method': "GET",
+                    'path': `/ticker/ufc?_=${time}`,
+                    'scheme': "https",
+                    'accept': "*/*",
+                    'accept-encoding': "gzip, deflate, br",
+                    'accept-language': "en-US,en;q=0.9,ja;q=0.8",
+                    'dnt': "1",
+                    'origin': "https://www.oddsshark.com",
+                    'referer': "https://www.oddsshark.com/",
+                    'sec-fetch-dest': "empty",
+                    'sec-fetch-mode': "cors",
+                    'sec-fetch-site': "same-site",
+                    'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36"
+                }
             }
             var response = await axios.get(`https://io.oddsshark.com/ticker/ufc?_=${time}`, options)
             var data = await UFC.parseMatchDataJson(response.data)
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
-            await fs.writeFile("../matchData.json", JSON.stringify(response.data, null, 2));
-            await fs.writeFile("../previousMatches.json", JSON.stringify(this.previousMatches, null, 2));
+            await fs.writeFile(`${__dirname}/../../../matchData.json`, JSON.stringify(response.data, null, 2));
+            await fs.writeFile(`${__dirname}/../../../previousMatches.json`, JSON.stringify(this.previousMatches, null, 2));
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             return false;
         }
@@ -79,11 +82,11 @@ class UFC {
     Uses hardcoded text file paths and checks to see if they exist then creates those files if they dont
     */
     async checkFiles() {
-        var files = ["../resolvedBets.json", "../matchData.json", "../users.json", "../previousMatches.json", "../bets.json"];
+        var files = [`${__dirname}/../../../resolvedBets.json`, `${__dirname}/../../../matchData.json`, `${__dirname}/../../../users.json`, `${__dirname}/../../../previousMatches.json`, `${__dirname}/../../../bets.json`];
         for (var file of files) {
             try {
                 await fs.readFile(file);
-            } catch(err) {
+            } catch (err) {
                 console.log(`${file} not found. Generating new blank file.`)
                 fs.writeFile(file, "[]")
             }
@@ -101,7 +104,7 @@ class UFC {
             await this.writeUsersToFile();
             return true;
         }
-        }
+    }
 
     async addBet(bet) {
         //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
@@ -112,21 +115,20 @@ class UFC {
         } else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
             console.log("Error: tried to make bet on a fight that is already over");
             return false;
-            } else
-            {
-                try {
-                    this.outstandingBets.push(bet);
-                    console.log("Adding new bet")
-                    await this.writeBetsToFile();
-                    return true;
-                } catch(err) {
-                    console.log(err);
-                    console.log("Failed to add to outstandingBets")
-                    return false;
-                }
-                
+        } else {
+            try {
+                this.outstandingBets.push(bet);
+                console.log("Adding new bet")
+                await this.writeBetsToFile();
+                return true;
+            } catch (err) {
+                console.log(err);
+                console.log("Failed to add to outstandingBets")
+                return false;
             }
+
         }
+    }
 
     /*
     Finds the outstanding bet that you want and deletes that bet then writes it to file to ensure its definitely gone.
@@ -162,7 +164,7 @@ class UFC {
         }
         if (foundBet) {
             return foundBet;
-        }else
+        } else
             return null;
     }
 
@@ -178,7 +180,7 @@ class UFC {
                 var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
                 if (fight) {
                     var winner = null;
-                    var loser = null; 
+                    var loser = null;
                     switch (bet.betType) {
                         case "classic":
 
@@ -194,12 +196,12 @@ class UFC {
                                 console.log("classic won: " + cashWon);
                                 this.addMoney(winner.uuid, (cashWon + bet.betAmount));
 
-                            //If the user lost. Don't give any money. We've already taken money from their account
-                            } else if (fight.winner != "") { 
+                                //If the user lost. Don't give any money. We've already taken money from their account
+                            } else if (fight.winner != "") {
                                 loser = bet.user1.user;
                                 console.log("classic lose");
 
-                            //Match was a draw. No one wins. Give back money
+                                //Match was a draw. No one wins. Give back money
                             } else {
                                 //Give back betAmount to the user.
                                 console.log("classic draw");
@@ -216,7 +218,7 @@ class UFC {
                                 //Give winner bet.betAmount * 2;
                                 this.addMoney(winner.user.uuid, (bet.betAmount * 2))
 
-                            //Otherwise, its a draw. No one wins. Give back both their money
+                                //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
                                 this.addMoney(bet.user1.user.uuid, bet.betAmount)
                                 this.addMoney(bet.user2.user.uuid, bet.betAmount)
@@ -239,14 +241,14 @@ class UFC {
         try {
             // console.log(resolvedBets.length);
             if (resolvedBets.length > 0) {
-                var jsonResolvedBets = JSON.parse(await fs.readFile("../resolvedBets.json"));
+                var jsonResolvedBets = JSON.parse(await fs.readFile(`${__dirname}/../../../resolvedBets.json`));
                 jsonResolvedBets = jsonResolvedBets.concat(resolvedBets);
-                await fs.writeFile("../resolvedBets.json", JSON.stringify(jsonResolvedBets, null, 2))
+                await fs.writeFile(`${__dirname}/../../../resolvedBets.json`, JSON.stringify(jsonResolvedBets, null, 2))
                 await this.writeBetsToFile();
                 await this.writeUsersToFile();
             }
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             console.log("Error saving jsonResolvedBets/Users to the json file.")
             return false;
@@ -260,7 +262,7 @@ class UFC {
             user.balance = user.balance + moneyGiven;
             await this.writeUsersToFile();
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err)
             return false;
         }
@@ -269,15 +271,15 @@ class UFC {
 
     async loadFromFile() {
         try {
-            var matchData = JSON.parse(file.readFileSync("../matchData.json"));
+            var matchData = JSON.parse(file.readFileSync(`${__dirname}/../../../matchData.json`));
             var data = await UFC.parseMatchDataJson(matchData);
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
             console.log("Successfully read matchData.json for upComingMatches and previousMatches.");
-            await fs.writeFile("../previousMatches.json", JSON.stringify(this.previousMatches, null, 2));
+            await fs.writeFile(`${__dirname}/../../../previousMatches.json`, JSON.stringify(this.previousMatches, null, 2));
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             return false;
         }
@@ -293,7 +295,7 @@ class UFC {
             user.balance = user.balance - moneyTaken;
             await this.writeUsersToFile();
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err)
             return false;
         }
@@ -307,9 +309,9 @@ class UFC {
     async writeBetsToFile() {
         console.log("Write Bets To File");
         try {
-            await fs.writeFile("../bets.json", JSON.stringify(this.outstandingBets, null, 2));
+            await fs.writeFile(`${__dirname}/../../../bets.json`, JSON.stringify(this.outstandingBets, null, 2));
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             return false;
         }
@@ -318,9 +320,9 @@ class UFC {
     async writeUsersToFile() {
         console.log("Write Users To File");
         try {
-            await fs.writeFile("../users.json", JSON.stringify(this.users, null, 2));
+            await fs.writeFile(`${__dirname}/../../../users.json`, JSON.stringify(this.users, null, 2));
             return true;
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             return false;
         }
@@ -329,7 +331,7 @@ class UFC {
     async findUser(uuid) {
         try {
             return this.users.find(user => user.uuid == uuid);
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             return null;
         }
@@ -341,7 +343,7 @@ class UFC {
     async getFight(fightEventID) {
         try {
             return this.upComingMatches.find(match => match.event_id == fightEventID);
-        } catch(err) {
+        } catch (err) {
             console.log(err);
             return null;
         }
@@ -352,50 +354,55 @@ class UFC {
     */
     static async parseMatchDataJson(data) {
         try {
-        var upComingMatches = [];
-        var previousMatches = JSON.parse(await fs.readFile("../previousMatches.json"));
-        for (var fight of data.matchups) {
-            try {
+            var upComingMatches = [];
+            var previousMatches = JSON.parse(await fs.readFile(`${__dirname}/../../../previousMatches.json`));
+            if (data.matchups) {
+                for (var fight of data.matchups) {
+                    try {
 
 
-                if (fight.type == "matchup") {
-                    //Starts by fixing unformated dates. Puts them in milliseconds form for easier use.
-                    var date = Date.parse(fight.event_date);
-                    if (isNaN(date)) date = Date.now();
-                    fight.event_date = date;
-                    if (fight.status == "") {
-                        if (!isNaN(fight.away_odds) && !isNaN(fight.home_odds)){
-                            upComingMatches.push(fight);
+                        if (fight.type == "matchup") {
+                            //Starts by fixing unformated dates. Puts them in milliseconds form for easier use.
+                            var date = Date.parse(fight.event_date);
+                            if (isNaN(date)) date = Date.now();
+                            fight.event_date = date;
+                            if (fight.status == "") {
+                                if (!isNaN(fight.away_odds) && !isNaN(fight.home_odds)) {
+                                    upComingMatches.push(fight);
+                                }
+                            } else {
+                                if (!previousMatches.find(match => match.event_id == fight.event_id))
+                                    previousMatches.push(fight);
+
+                            }
                         }
-                    } else {
-                        if (!previousMatches.find(match => match.event_id == fight.event_id))
-                            previousMatches.push(fight);
-                            
+                    } catch (err) {
+                        console.log(err);
+                        continue;
                     }
                 }
+            }
+            return { upComingMatches: upComingMatches, previousMatches: previousMatches }
         } catch (err) {
             console.log(err);
-            continue;
-            }
+            return null;
         }
-        return {upComingMatches: upComingMatches, previousMatches: previousMatches}
-    }catch(err) {
-        console.log(err);
-        return null;
     }
-}
 }
 main();
 /*
 Test function
 */
 async function main() {
-    var test = new UFC();
-    await test.loadFromFile();
+    // var test = new UFC();
+    // await test.loadFromFile();
+    // await test.refreshUpComingMatches();
+    // await test.resolveBets();
+
     // console.log(test.previousMatches)
     // console.log(test.upComingMatches.length);
     // console.log(test.previousMatches.length);
-    var john = await test.findUser(1234);
+    // var john = await test.findUser(1234);
     // var bob = await test.findUser(456);
     // var fight = test.getFight()
     // test.addUser(123, "john");
@@ -408,7 +415,7 @@ async function main() {
     // console.log(test.previousMatches);
     // await test.addBet(new Bet("1v1", 200, 1382448, 1615694400000, {user: john, fighterName:"M Nicolau"}, {user: bob, fighterName:"T Ulanbekov"}, {user1: "125", user2: "-145"} ))
     // await test.addBet(new Bet("classic", 300, 1370716, 1615096800000, {user: john, fighterName:"I Adesanya"}, null, {user1: "-250", user2: null} ))
-    await test.resolveBets();
+    // await test.resolveBets();
     // await test.cancelBet("classic", john, null);
     // console.log(test.outstandingBets);
 }
