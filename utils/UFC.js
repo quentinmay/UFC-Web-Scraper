@@ -108,7 +108,14 @@ class UFC {
 
     async addBet(bet) {
         //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
-        var foundBet = await this.findOutstandingBet(bet.betType, bet.user1, bet.user2);
+        let foundBet;
+        if (bet.betType == "classic") {
+            foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, null);
+        } else {
+            foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, bet.user2.uuid);
+
+        }
+
         if (foundBet) {
             console.log("Error: bet of this type already exists with this player/s");
             return false;
@@ -117,9 +124,19 @@ class UFC {
             return false;
         } else {
             try {
-                this.outstandingBets.push(bet);
+                let user1 = await this.findUser(bet.user1.uuid);
                 console.log("Adding new bet")
+                user1.currentBets.push(bet);
+                if (bet.user2) {
+                    let user2 = await this.findUser(bet.user2.uuid);
+                    if (user2) {
+                        user2.currentBets.push(bet);
+                    }
+                }
+
+                this.outstandingBets.push(bet);
                 await this.writeBetsToFile();
+                await this.writeUsersToFile();
                 return true;
             } catch (err) {
                 console.log(err);
@@ -133,9 +150,9 @@ class UFC {
     /*
     Finds the outstanding bet that you want and deletes that bet then writes it to file to ensure its definitely gone.
     */
-    async cancelBet(betType, user1, user2) {
+    async cancelBet(betType, user1ID, user2ID) {
         try {
-            var bet = await this.findOutstandingBet(betType, user1, user2);
+            var bet = await this.findOutstandingBet(betType, user1ID, user2ID);
             if (bet) {
                 console.log("Cancelling bet");
                 this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
@@ -155,12 +172,12 @@ class UFC {
     /* 
     Utility function to find certain outstanding bets.
     */
-    async findOutstandingBet(betType, user1, user2) {
+    async findOutstandingBet(betType, user1ID, user2ID) {
         var foundBet = null;
         if (betType == "classic") {
-            foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.user.uuid == user1.user.uuid));
+            foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.uuid == user1ID));
         } else if (betType == "1v1") {
-            foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.user.uuid == user1.user.uuid && b.user2.user.uuid == user2.user.uuid) || b.user1.user.uuid == user2.user.uuid && b.user2.user.uuid == user1.user.uuid));
+            foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.uuid == user1ID && b.user2.uuid == user2ID) || b.user1.uuid == user2ID && b.user2.uuid == user1ID));
         }
         if (foundBet) {
             return foundBet;
@@ -179,49 +196,49 @@ class UFC {
             if (Date.now() > bet.fightEventDate) { //If we passed the bets fight date. Then we want to check the completion of the fight
                 var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
                 if (fight) {
-                    var winner = null;
-                    var loser = null;
+                    var winnerID = null;
+                    var loserID = null;
                     switch (bet.betType) {
                         case "classic":
 
                             //If the user won. Reference https://www.gamingtoday.com/tools/moneyline/ for calculating winnings
                             if (bet.user1.fighterName == fight.winner) {
                                 var cashWon = 0;
-                                winner = bet.user1.user;
+                                winnerID = bet.user1.uuid;
                                 //Must use odds saved in the bet data. Sometimes, odds will change, so if we scrape website again, it will have different odds.
                                 if (bet.odds.user1 > 0) cashWon = (bet.betAmount * bet.odds.user1 / 100);
                                 else if (bet.odds.user1 < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
 
                                 //now add cashWon + betAmount to the users account.
                                 console.log("classic won: " + cashWon);
-                                this.addMoney(winner.uuid, parseInt(cashWon + bet.betAmount));
+                                this.addMoney(winnerID, parseInt(cashWon + bet.betAmount));
 
                                 //If the user lost. Don't give any money. We've already taken money from their account
                             } else if (fight.winner != "") {
-                                loser = bet.user1.user;
+                                loserID = bet.user1.uuid;
                                 console.log("classic lose");
 
                                 //Match was a draw. No one wins. Give back money
                             } else {
                                 //Give back betAmount to the user.
                                 console.log("classic draw");
-                                this.addMoney(bet.user1.user.uuid, bet.betAmount);
+                                this.addMoney(bet.user1.uuid, bet.betAmount);
                             }
 
                             break;
                         case "1v1":
                             //If there was a winner
                             if (fight.winner != "") {
-                                winner = [bet.user1, bet.user2].find(user => user.fighterName == fight.winner);
-                                loser = [bet.user1, bet.user2].find(user => user != winner);
+                                winnerID = [bet.user1, bet.user2].find(user => user.fighterName == fight.winner);
+                                loserID = [bet.user1, bet.user2].find(user => user != winnerID);
 
                                 //Give winner bet.betAmount * 2;
-                                this.addMoney(winner.user.uuid, (bet.betAmount * 2))
+                                this.addMoney(winnerID, (bet.betAmount * 2))
 
                                 //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
-                                this.addMoney(bet.user1.user.uuid, bet.betAmount)
-                                this.addMoney(bet.user2.user.uuid, bet.betAmount)
+                                this.addMoney(bet.user1.uuid, bet.betAmount)
+                                this.addMoney(bet.user2.uuid, bet.betAmount)
                             }
 
                             break;
@@ -260,11 +277,14 @@ class UFC {
         try {
             moneyGiven = parseInt(moneyGiven);
             var user = this.users.find(user => user.uuid == uuid);
-            user.balance = parseInt(user.balance) + moneyGiven;
+            let newBalance = parseInt(user.balance) + moneyGiven;
+            if (isNaN(newBalance)) throw new Error("New balance wasn't a real number")
+            user.balance = newBalance;
             await this.writeUsersToFile();
             return true;
+
         } catch (err) {
-            console.log(err)
+            // console.log(err)
             return false;
         }
     }
@@ -293,12 +313,14 @@ class UFC {
         try {
             moneyTaken = parseInt(moneyTaken);
             var user = this.users.find(user => user.uuid == uuid);
+            let newBalance = parseInt(user.balance) - moneyTaken;
             if (parseInt(user.balance) - moneyTaken < 0) throw new Error("User balance can't fall below 0");
-            user.balance = parseInt(user.balance) - moneyTaken;
+            if (isNaN(newBalance)) throw new Error("User balance is not a real number.")
+            user.balance = newBalance
             await this.writeUsersToFile();
             return true;
         } catch (err) {
-            console.log(err)
+            // console.log(err)
             return false;
         }
     }

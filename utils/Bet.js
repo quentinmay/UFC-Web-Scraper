@@ -15,8 +15,8 @@ class Bet {
         this.betAmount = parseInt(betAmount);
         this.fightEventID = fightEventID; //Unique ID assigned from the UFC website for each match..
         this.fightEventDate = fightEventDate; //Date of the fight.
-        this.user1 = user1; //Ex. {User 1, fighterName}. Necessary
-        this.user2 = user2; //Ex. {User 2, fighterName}. Only necessary when 1v1. Should be null for classic type bets   
+        this.user1 = user1; //Ex. {User 1 UUID, fighterName}. Necessary
+        this.user2 = user2; //Ex. {User 2 UUID, fighterName}. Only necessary when 1v1. Should be null for classic type bets   
         this.odds = odds; //The odds formated {user1 odds - user2 odds}
         this.betResolved = betResolved; //false by default. true is the fight finished
     }
