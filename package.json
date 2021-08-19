@@ -1,6 +1,6 @@
 {
   "name": "ufc-betting-game",
-  "version": "1.1.5",
+  "version": "1.1.9",
   "description": "UFC betting game",
   "main": "./utils/UFC.js",
   "scripts": {

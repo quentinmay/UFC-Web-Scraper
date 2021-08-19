@@ -111,12 +111,12 @@ class UFC {
         //Checks to see if there are any bets on the same fight between the SAME 1 or 2 people
         let foundBet;
         if (bet.betType == "classic") {
-            foundBet = await this.outstandingBets.find(b => (b.betType == bet.betType && b.user1.uuid == bet.user1.uuid && b.fightEventID == bet.fightEventID));
+            foundBet = this.outstandingBets.find(b => (b.betType == bet.betType && b.user1.uuid == bet.user1.uuid && b.fightEventID == bet.fightEventID));
             // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, null);
             // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, null);
         } else {
             // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, bet.user2.uuid);
-            foundBet = await this.outstandingBets.find(b => (b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || (b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid)) && b.fightEventID == bet.fightEventID));
+            foundBet = this.outstandingBets.find(b => (b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || (b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid)) && b.fightEventID == bet.fightEventID));
 
         }
 
@@ -154,13 +154,20 @@ class UFC {
     /*
     Finds the outstanding bet that you want and deletes that bet then writes it to file to ensure its definitely gone.
     */
-    async cancelBet(betType, user1ID, user2ID) {
+    async cancelBet(betType, fightID, user1ID, user2ID) {
         try {
-            var bet = await this.findOutstandingBet(betType, user1ID, user2ID);
+            let bet = await this.findOutstandingBetWithFightID(betType, fightID, user1ID, user2ID);
             if (bet) {
-                console.log("Cancelling bet");
                 this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
+                let user1 = await this.findUser(bet.user1.uuid);
+                user1.currentBets.splice(user1.currentBets.findIndex(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid), 1);
+                try {
+                    let user2 = await this.findUser(bet.user2.uuid);
+                    user2.currentBets.splice(user2.currentBets.findIndex(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid), 1);
+                } catch (err) {
+                }
                 await this.writeBetsToFile();
+                await this.writeUsersToFile();
                 return true;
             } else {
                 console.log("Bet to delete wasn't found.");
@@ -182,6 +189,23 @@ class UFC {
             foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.uuid == user1ID));
         } else if (betType == "1v1") {
             foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.uuid == user1ID && b.user2.uuid == user2ID) || b.user1.uuid == user2ID && b.user2.uuid == user1ID));
+        }
+        if (foundBet) {
+            return foundBet;
+        } else
+            return null;
+    }
+
+
+    /* 
+    Utility function to find certain outstanding bets.
+    */
+    async findOutstandingBetWithFightID(betType, fightID, user1ID, user2ID) {
+        var foundBet = null;
+        if (betType == "classic") {
+            foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.uuid == user1ID) && b.fightEventID == fightID);
+        } else if (betType == "1v1") {
+            foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.uuid == user1ID && b.user2.uuid == user2ID) || b.user1.uuid == user2ID && b.user2.uuid == user1ID) && b.fightEventID == fightID);
         }
         if (foundBet) {
             return foundBet;
@@ -215,7 +239,7 @@ class UFC {
 
                                 //now add cashWon + betAmount to the users account.
                                 console.log("classic won: " + cashWon);
-                                this.addMoney(winnerID, parseInt(cashWon + bet.betAmount));
+                                await this.addMoney(winnerID, parseInt(cashWon + bet.betAmount));
 
                                 //If the user lost. Don't give any money. We've already taken money from their account
                             } else if (fight.winner != "") {
@@ -226,7 +250,7 @@ class UFC {
                             } else {
                                 //Give back betAmount to the user.
                                 console.log("classic draw");
-                                this.addMoney(bet.user1.uuid, bet.betAmount);
+                                await this.addMoney(bet.user1.uuid, bet.betAmount);
                             }
 
                             break;
@@ -237,12 +261,12 @@ class UFC {
                                 loserID = [bet.user1, bet.user2].find(user => user != winnerID);
 
                                 //Give winner bet.betAmount * 2;
-                                this.addMoney(winnerID, (bet.betAmount * 2))
+                                await this.addMoney(winnerID, (bet.betAmount * 2))
 
                                 //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
-                                this.addMoney(bet.user1.uuid, bet.betAmount)
-                                this.addMoney(bet.user2.uuid, bet.betAmount)
+                                await this.addMoney(bet.user1.uuid, bet.betAmount)
+                                await this.addMoney(bet.user2.uuid, bet.betAmount)
                             }
 
                             break;
@@ -254,6 +278,16 @@ class UFC {
                     resolvedBets.push(bet);
                     //Removes bet from outstandingBets
                     this.outstandingBets.splice(this.outstandingBets.indexOf(bet), 1);
+                    let user1 = await this.findUser(bet.user1.uuid);
+                    user1.currentBets.splice(user1.currentBets.findIndex(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid), 1);
+                    try {
+                        let user2 = await this.findUser(bet.user2.uuid);
+                        user2.currentBets.splice(user2.currentBets.findIndex(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid), 1);
+                    } catch (err) {
+                    }
+
+                    await this.writeBetsToFile();
+                    await this.writeUsersToFile();
                 }
 
             }
