@@ -194,7 +194,7 @@ class UFC {
 
                                 //now add cashWon + betAmount to the users account.
                                 console.log("classic won: " + cashWon);
-                                this.addMoney(winner.uuid, (cashWon + bet.betAmount));
+                                this.addMoney(winner.uuid, parseInt(cashWon + bet.betAmount));
 
                                 //If the user lost. Don't give any money. We've already taken money from their account
                             } else if (fight.winner != "") {
@@ -258,8 +258,9 @@ class UFC {
 
     async addMoney(uuid, moneyGiven) {
         try {
+            moneyGiven = parseInt(moneyGiven);
             var user = this.users.find(user => user.uuid == uuid);
-            user.balance = user.balance + moneyGiven;
+            user.balance = parseInt(user.balance) + moneyGiven;
             await this.writeUsersToFile();
             return true;
         } catch (err) {
@@ -290,9 +291,10 @@ class UFC {
     */
     async takeMoney(uuid, moneyTaken) {
         try {
+            moneyTaken = parseInt(moneyTaken);
             var user = this.users.find(user => user.uuid == uuid);
-            if (user.balance - moneyTaken < 0) throw new Error("User balance can't fall below 0");
-            user.balance = user.balance - moneyTaken;
+            if (parseInt(user.balance) - moneyTaken < 0) throw new Error("User balance can't fall below 0");
+            user.balance = parseInt(user.balance) - moneyTaken;
             await this.writeUsersToFile();
             return true;
         } catch (err) {
