@@ -213,6 +213,25 @@ class UFC {
             return null;
     }
 
+
+    async verify1v1Bet(betType, fightID, user1ID, user2ID) {
+        try {
+            let bet = await this.findOutstandingBetWithFightID(betType, fightID, user1ID, user2ID);
+            if (bet && betType == "1v1") {
+                let user1 = await this.findUser(user1ID);
+                let user2 = await this.findUser(user2ID);
+                let user1Bet = user1.currentBets.find(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid);
+                let user2Bet = user2.currentBets.find(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid);
+                user1Bet.accepted = true;
+                user2Bet.accepted = true;
+                bet.accepted = true;
+                return bet;
+            }
+        } catch (err) {
+            return false
+        }
+        return false;
+    }
     /*
     Loops through all existing bets within outstandingBets file to find all the bets that SHOULD be ready to be completed. If the fight is within previousMatches (over
     and decision exists), resolves the bet from there. If not, doesnt do anything.
