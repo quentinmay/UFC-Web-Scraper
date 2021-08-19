@@ -107,17 +107,21 @@ class UFC {
     }
 
     async addBet(bet) {
-        //Checks to see if there are any bets of the same type between the SAME 1 or 2 people
+        //------Checks to see if there are any bets of the same type between the SAME 1 or 2 people
+        //Checks to see if there are any bets on the same fight between the SAME 1 or 2 people
         let foundBet;
         if (bet.betType == "classic") {
-            foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, null);
+            foundBet = await this.outstandingBets.find(b => (b.betType == bet.betType && b.user1.uuid == bet.user1.uuid && b.fightEventID == bet.fightEventID));
+            // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, null);
+            // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, null);
         } else {
-            foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, bet.user2.uuid);
+            // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, bet.user2.uuid);
+            foundBet = await this.outstandingBets.find(b => (b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || (b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid)) && b.fightEventID == bet.fightEventID));
 
         }
 
         if (foundBet) {
-            console.log("Error: bet of this type already exists with this player/s");
+            console.log("Error: bet of this type with these users on this fight already exists.");
             return false;
         } else if (this.previousMatches.find(match => match.event_id == bet.fightEventID)) {
             console.log("Error: tried to make bet on a fight that is already over");
