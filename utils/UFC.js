@@ -225,6 +225,8 @@ class UFC {
                 user1Bet.accepted = true;
                 user2Bet.accepted = true;
                 bet.accepted = true;
+                await this.writeBetsToFile();
+                await this.writeUsersToFile();
                 return bet;
             }
         } catch (err) {
