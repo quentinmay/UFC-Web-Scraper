@@ -3,11 +3,12 @@ var Bet = require("./Bet.js");
 var User = require("./User.js");
 var fs = require("fs").promises;
 var file = require("fs");
+const { EventEmitter } = require('events');
 
-
-class UFC {
+class UFC extends EventEmitter {
 
     constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
+        super();
         if (!users) {
             try {
                 // "./node_modules/ufc-betting-game/utils/"
@@ -19,6 +20,7 @@ class UFC {
             }
         }
         if (!upComingMatches) {
+            upComingMatches = [];
         }
         if (!outstandingBets) {
             try {
@@ -37,6 +39,7 @@ class UFC {
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
         this.checkFiles(); //Just checks to see if all the necessary json files are made.
+
     }
 
     /*
@@ -261,17 +264,19 @@ class UFC {
                                 //now add cashWon + betAmount to the users account.
                                 console.log("classic won: " + cashWon);
                                 await this.addMoney(winnerID, parseInt(cashWon + bet.betAmount));
-
+                                this.emit('betResolved', bet, "WON", winnerID, cashWon + bet.betAmount);
                                 //If the user lost. Don't give any money. We've already taken money from their account
                             } else if (fight.winner != "") {
                                 loserID = bet.user1.uuid;
                                 console.log("classic lose");
+                                this.emit('betResolved', bet, "LOST", null, 0);
 
                                 //Match was a draw. No one wins. Give back money
                             } else {
                                 //Give back betAmount to the user.
                                 console.log("classic draw");
                                 await this.addMoney(bet.user1.uuid, bet.betAmount);
+                                this.emit('betResolved', bet, "DRAW", null, 0);
                             }
 
                             break;
@@ -283,11 +288,13 @@ class UFC {
 
                                 //Give winner bet.betAmount * 2;
                                 await this.addMoney(winnerID, (bet.betAmount * 2))
+                                this.emit('betResolved', bet, "WON", winnerID, bet.betAmount * 2);
 
                                 //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
                                 await this.addMoney(bet.user1.uuid, bet.betAmount)
                                 await this.addMoney(bet.user2.uuid, bet.betAmount)
+                                this.emit('betResolved', bet, "DRAW", null, 0);
                             }
 
                             break;
@@ -307,8 +314,7 @@ class UFC {
                     } catch (err) {
                     }
 
-                    await this.writeBetsToFile();
-                    await this.writeUsersToFile();
+
                 }
 
             }
@@ -349,9 +355,10 @@ class UFC {
     }
 
 
-    async loadFromFile() {
+    async loadFromFile(filePath) {
         try {
-            var matchData = JSON.parse(file.readFileSync(`${__dirname}/../../../matchData.json`));
+            if (!filePath) filePath = `${__dirname}/../../../matchData.json`;
+            var matchData = JSON.parse(file.readFileSync(filePath));
             var data = await UFC.parseMatchDataJson(matchData);
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
@@ -477,7 +484,7 @@ main();
 Test function
 */
 async function main() {
-    // var test = new UFC();
+    var test = new UFC();
     // await test.loadFromFile();
     // await test.refreshUpComingMatches();
     // await test.resolveBets();
