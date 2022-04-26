@@ -2,12 +2,12 @@ var axios = require("axios");
 var Bet = require("./Bet.js");
 var User = require("./User.js");
 var fs = require("fs").promises;
-var file = require("fs");
+
 const { EventEmitter } = require('events');
 
 
 class UFC extends EventEmitter {
-    constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed, usersPath=`${__dirname}/../../../users.json`, betsPath=`${__dirname}/../../../bets.json`, matchDataPath=`${__dirname}/../../../matchData.json`, previousMatchesPath=`${__dirname}/../../../previousMatches.json`, resolvedBetsPath=`${__dirname}/../../../resolvedBets.json`) {
+    constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed, usersPath = `${__dirname}/../../../users.json`, betsPath = `${__dirname}/../../../bets.json`, matchDataPath = `${__dirname}/../../../matchData.json`, previousMatchesPath = `${__dirname}/../../../previousMatches.json`, resolvedBetsPath = `${__dirname}/../../../resolvedBets.json`) {
         super();
         this.usersPath = usersPath;
         this.betsPath = betsPath;
@@ -20,7 +20,7 @@ class UFC extends EventEmitter {
         this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.  
-        
+
     }
 
     async initialize() {
@@ -51,7 +51,7 @@ class UFC extends EventEmitter {
             }
         }
 
- 
+
         this.checkFiles(); //Just checks to see if all the necessary json files are made.
         return true;
     }
@@ -135,7 +135,6 @@ class UFC extends EventEmitter {
         } else {
             // foundBet = await this.findOutstandingBet(bet.betType, bet.user1.uuid, bet.user2.uuid);
             foundBet = this.outstandingBets.find(b => (b.betType == bet.betType && ((b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid) || (b.user1.uuid == bet.user2.uuid && b.user2.uuid == bet.user1.uuid)) && b.fightEventID == bet.fightEventID));
-
         }
 
         if (foundBet) {
@@ -223,7 +222,7 @@ class UFC extends EventEmitter {
         var foundBet = null;
         if (betType == "classic") {
             foundBet = this.outstandingBets.find(b => (b.betType == betType && b.user1.uuid == user1ID) && b.fightEventID == fightID);
-        } else if (betType == "1v1") {
+        } else if (betType == "1v1" || betType == "1v1odds") {
             foundBet = this.outstandingBets.find(b => b.betType == betType && ((b.user1.uuid == user1ID && b.user2.uuid == user2ID) || b.user1.uuid == user2ID && b.user2.uuid == user1ID) && b.fightEventID == fightID);
         }
         if (foundBet) {
@@ -236,7 +235,7 @@ class UFC extends EventEmitter {
     async verify1v1Bet(betType, fightID, user1ID, user2ID) {
         try {
             let bet = await this.findOutstandingBetWithFightID(betType, fightID, user1ID, user2ID);
-            if (bet && betType == "1v1") {
+            if (bet && (betType == "1v1" || betType == "1v1odds")) {
                 let user1 = await this.findUser(user1ID);
                 let user2 = await this.findUser(user2ID);
                 let user1Bet = user1.currentBets.find(b => b.betType == bet.betType && b.fightEventID == bet.fightEventID && b.user1.uuid == bet.user1.uuid && b.user2.uuid == bet.user2.uuid);
@@ -254,17 +253,22 @@ class UFC extends EventEmitter {
         }
         return false;
     }
+
+    async calcMoneyWon(odds, money) {
+        if (odds > 0) return (money * odds / 100);
+        else if (odds < 0) return (money / (-1 * odds / 100));
+    }
+
     /*
     Loops through all existing bets within outstandingBets file to find all the bets that SHOULD be ready to be completed. If the fight is within previousMatches (over
     and decision exists), resolves the bet from there. If not, doesnt do anything.
     */
     async resolveBets() {
         var resolvedBets = [];
-        console.log('resolve bets', this.outstandingBets);
         for (var bet of this.outstandingBets) {
             if (Date.now() > bet.fightEventDate) { //If we passed the bets fight date. Then we want to check the completion of the fight
                 var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
-                if (fight) {
+                    if (fight) {
                     var winnerID = null;
                     var loserID = null;
                     switch (bet.betType) {
@@ -306,24 +310,53 @@ class UFC extends EventEmitter {
                                 //Give winner bet.betAmount * 2;
                                 if (!isNaN(bet.betAmount)) {
                                     await this.addMoney(winnerID.uuid, (bet.betAmount * 2))
-                                    this.emit('betResolved', bet, "WON", winnerID, bet.betAmount * 2);
+                                    this.emit('betResolved', bet, "WON", winnerID.uuid, bet.betAmount * 2);
                                 } else { //This is a 1v1 dare bet.
 
-                                    this.emit('betResolved', bet, "WON", winnerID, bet.betAmount);
+                                    this.emit('betResolved', bet, "WON", winnerID.uuid, bet.betAmount);
                                 }
 
                                 //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
                                 if (!isNaN(bet.betAmount)) {
-                                await this.addMoney(bet.user1.uuid, bet.betAmount)
-                                await this.addMoney(bet.user2.uuid, bet.betAmount)
-                                this.emit('betResolved', bet, "DRAW", null, 0);
-                            } else {
-                                this.emit('betResolved', bet, "DRAW", null, bet.betAmount); //bet.betAmount is a dare.
+                                    await this.addMoney(bet.user1.uuid, bet.betAmount)
+                                    await this.addMoney(bet.user2.uuid, bet.betAmount)
+                                    this.emit('betResolved', bet, "DRAW", null, 0);
+                                } else {
+                                    this.emit('betResolved', bet, "DRAW", null, bet.betAmount); //bet.betAmount is a dare.
 
                                 }
                             }
 
+                            break;
+                        case "1v1odds":
+                            //If there was a winner
+                            winnerID = [bet.user1, bet.user2].find(user => user.fighterName == fight.winner);
+                            loserID = [bet.user1, bet.user2].find(user => user != winnerID);
+                            let winnerPos = [bet.user1, bet.user2].indexOf(winnerID)
+                            let winnerOdds = [bet.odds.user1, bet.odds.user2][winnerPos];
+                            let loserOdds = [bet.odds.user1, bet.odds.user2][[bet.user1, bet.user2].indexOf(loserID)];
+                            let user1MoneyInput = bet.betAmount;
+                            let user2MoneyInput = await this.calcMoneyWon(bet.odds.user1, bet.betAmount);
+                            if (fight.winner != "") {
+                                // await test.addBet(new Bet("1v1odds", 200, 1646096, 61270400000, {uuid: user1.uuid, fighterName:"R Font"}, {uuid: user2.uuid, fighterName:"M Vera"}, {user1: "-138", user2: "110"} ))
+
+
+
+                                let winnerMoneyInput = (winnerPos == 0) ? bet.betAmount : user2MoneyInput;
+
+                                let winnerMoney = await this.calcMoneyWon(winnerOdds, winnerMoneyInput);
+                                //Give winner money
+                                await this.addMoney(winnerID.uuid, winnerMoneyInput + winnerMoney)
+                                this.emit('betResolved', bet, "WON", winnerID.uuid, winnerMoney);
+
+
+                                //Otherwise, its a draw. No one wins. Give back both their money
+                            } else {
+                                await this.addMoney(bet.user1.uuid, user1MoneyInput)
+                                await this.addMoney(bet.user2.uuid, user2MoneyInput)
+                                this.emit('betResolved', bet, "DRAW", null, 0);
+                            }
                             break;
                         default:
                             break;
@@ -472,7 +505,6 @@ class UFC extends EventEmitter {
     async parseMatchDataJson(data) {
         try {
             var upComingMatches = [];
-            console.log(this.previousMatchesPath);
             var previousMatches = JSON.parse(await fs.readFile(this.previousMatchesPath));
             if (data.matchups) {
                 for (var fight of data.matchups) {
