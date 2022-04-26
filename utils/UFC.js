@@ -59,6 +59,8 @@ class UFC extends EventEmitter {
     }
 
     async initialize() {
+        await this.checkFiles(); //Just checks to see if all the necessary json files are made.
+
         if (this.databaseURI) {
             await this.loadMongoDB(this.databaseURI)
         }
@@ -100,7 +102,6 @@ class UFC extends EventEmitter {
         }
 
 
-        this.checkFiles(); //Just checks to see if all the necessary json files are made.
         return true;
     }
 
@@ -160,9 +161,10 @@ class UFC extends EventEmitter {
                 await fs.readFile(file);
             } catch (err) {
                 console.log(`${file} not found. Generating new blank file.`)
-                fs.writeFile(file, "[]")
+                await fs.writeFile(file, "[]")
             }
         }
+        return;
     }
 
     async addUser(uuid, name) {
