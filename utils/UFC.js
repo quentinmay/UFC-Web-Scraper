@@ -5,42 +5,57 @@ var fs = require("fs").promises;
 var file = require("fs");
 const { EventEmitter } = require('events');
 
+
 class UFC extends EventEmitter {
-
-    constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed) {
+    constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed, usersPath=`${__dirname}/../../../users.json`, betsPath=`${__dirname}/../../../bets.json`, matchDataPath=`${__dirname}/../../../matchData.json`, previousMatchesPath=`${__dirname}/../../../previousMatches.json`, resolvedBetsPath=`${__dirname}/../../../resolvedBets.json`) {
         super();
-        if (!users) {
-            try {
-                // "./node_modules/ufc-betting-game/utils/"
-                var jsonUsers = JSON.parse(file.readFileSync(`${__dirname}/../../../users.json`));
-                users = jsonUsers;
-                console.log("Successfully read users.json for user data.");
-            } catch (err) {
-                users = [];
-            }
-        }
-        if (!upComingMatches) {
-            upComingMatches = [];
-        }
-        if (!outstandingBets) {
-            try {
-                var jsonBets = JSON.parse(file.readFileSync(`${__dirname}/../../../bets.json`));
-                outstandingBets = jsonBets;
-                console.log("Successfully read bets.json for outstandingBets.");
-            } catch (err) {
-                outstandingBets = [];
-            }
-        }
-
+        this.usersPath = usersPath;
+        this.betsPath = betsPath;
+        this.matchDataPath = matchDataPath;
+        this.previousMatchesPath = previousMatchesPath;
+        this.resolvedBetsPath = resolvedBetsPath;
         if (!lastRefreshed) lastRefreshed = 0;
         this.users = users; //List of users
         this.upComingMatches = upComingMatches; //List of upcoming matches
         this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
-        this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.   
-        this.checkFiles(); //Just checks to see if all the necessary json files are made.
-
+        this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.  
+        
     }
+
+    async initialize() {
+        if (!this.users) {
+            try {
+                // "./node_modules/ufc-betting-game/utils/"
+                // var jsonUsers = JSON.parse(file.readFileSync(this.usersPath));
+                var jsonUsers = JSON.parse(await fs.readFile(this.usersPath, "utf-8"));
+                this.users = jsonUsers;
+                console.log(`Successfully read users data from ${this.usersPath} for user data.`);
+            } catch (err) {
+                console.log(err);
+                this.users = [];
+            }
+        }
+        if (!this.upComingMatches) {
+            this.upComingMatches = [];
+        }
+        if (!this.outstandingBets) {
+            try {
+                var jsonBets = JSON.parse(await fs.readFile(this.betsPath, "utf-8"));
+                // var jsonBets = JSON.parse(file.readFileSync(this.betsPath));
+                this.outstandingBets = jsonBets;
+                console.log(`Successfully read bets data from ${this.betsPath} for outstandingBets.`);
+            } catch (err) {
+                console.log(err);
+                this.outstandingBets = [];
+            }
+        }
+
+ 
+        this.checkFiles(); //Just checks to see if all the necessary json files are made.
+        return true;
+    }
+
 
     /*
     Webscrapes oddshark UFC website for match data.
@@ -68,12 +83,12 @@ class UFC extends EventEmitter {
                 }
             }
             var response = await axios.get(`https://io.oddsshark.com/ticker/ufc?_=${time}`, options)
-            var data = await UFC.parseMatchDataJson(response.data)
+            var data = await this.parseMatchDataJson(response.data)
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
-            await fs.writeFile(`${__dirname}/../../../matchData.json`, JSON.stringify(response.data, null, 2));
-            await fs.writeFile(`${__dirname}/../../../previousMatches.json`, JSON.stringify(this.previousMatches, null, 2));
+            await fs.writeFile(this.matchDataPath, JSON.stringify(response.data, null, 2));
+            await fs.writeFile(this.previousMatchesPath, JSON.stringify(this.previousMatches, null, 2));
             return true;
         } catch (err) {
             console.log(err);
@@ -85,7 +100,7 @@ class UFC extends EventEmitter {
     Uses hardcoded text file paths and checks to see if they exist then creates those files if they dont
     */
     async checkFiles() {
-        var files = [`${__dirname}/../../../resolvedBets.json`, `${__dirname}/../../../matchData.json`, `${__dirname}/../../../users.json`, `${__dirname}/../../../previousMatches.json`, `${__dirname}/../../../bets.json`];
+        var files = [this.resolvedBetsPath, this.matchDataPath, this.usersPath, this.previousMatchesPath, this.betsPath];
         for (var file of files) {
             try {
                 await fs.readFile(file);
@@ -131,6 +146,7 @@ class UFC extends EventEmitter {
             return false;
         } else {
             try {
+                // console.log(bet);
                 let user1 = await this.findUser(bet.user1.uuid);
                 console.log("Adding new bet")
                 user1.currentBets.push(bet);
@@ -233,6 +249,7 @@ class UFC extends EventEmitter {
                 return bet;
             }
         } catch (err) {
+            console.log(err);
             return false
         }
         return false;
@@ -243,7 +260,7 @@ class UFC extends EventEmitter {
     */
     async resolveBets() {
         var resolvedBets = [];
-        console.log('resolve bets');
+        console.log('resolve bets', this.outstandingBets);
         for (var bet of this.outstandingBets) {
             if (Date.now() > bet.fightEventDate) { //If we passed the bets fight date. Then we want to check the completion of the fight
                 var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
@@ -262,21 +279,21 @@ class UFC extends EventEmitter {
                                 else if (bet.odds.user1 < 0) cashWon = (bet.betAmount / (-1 * bet.odds.user1 / 100));
 
                                 //now add cashWon + betAmount to the users account.
-                                console.log("classic won: " + cashWon);
+                                // console.log("classic won: " + cashWon);
                                 await this.addMoney(winnerID, parseInt(cashWon + bet.betAmount));
                                 this.emit('betResolved', bet, "WON", winnerID, cashWon + bet.betAmount);
                                 //If the user lost. Don't give any money. We've already taken money from their account
                             } else if (fight.winner != "") {
                                 loserID = bet.user1.uuid;
-                                console.log("classic lose");
+                                // console.log("classic lose");
                                 this.emit('betResolved', bet, "LOST", null, 0);
 
                                 //Match was a draw. No one wins. Give back money
                             } else {
                                 //Give back betAmount to the user.
-                                console.log("classic draw");
+                                // console.log("classic draw");
                                 await this.addMoney(bet.user1.uuid, bet.betAmount);
-                                this.emit('betResolved', bet, "DRAW", null, 0);
+                                this.emit('betResolved', bet, "DRAW", null, bet.betAmount);
                             }
 
                             break;
@@ -287,14 +304,24 @@ class UFC extends EventEmitter {
                                 loserID = [bet.user1, bet.user2].find(user => user != winnerID);
 
                                 //Give winner bet.betAmount * 2;
-                                await this.addMoney(winnerID, (bet.betAmount * 2))
-                                this.emit('betResolved', bet, "WON", winnerID, bet.betAmount * 2);
+                                if (!isNaN(bet.betAmount)) {
+                                    await this.addMoney(winnerID, (bet.betAmount * 2))
+                                    this.emit('betResolved', bet, "WON", winnerID, bet.betAmount * 2);
+                                } else { //This is a 1v1 dare bet.
+
+                                    this.emit('betResolved', bet, "WON", winnerID, bet.betAmount);
+                                }
 
                                 //Otherwise, its a draw. No one wins. Give back both their money
                             } else {
+                                if (!isNaN(bet.betAmount)) {
                                 await this.addMoney(bet.user1.uuid, bet.betAmount)
                                 await this.addMoney(bet.user2.uuid, bet.betAmount)
                                 this.emit('betResolved', bet, "DRAW", null, 0);
+                            } else {
+                                this.emit('betResolved', bet, "DRAW", null, bet.betAmount); //bet.betAmount is a dare.
+
+                                }
                             }
 
                             break;
@@ -323,9 +350,9 @@ class UFC extends EventEmitter {
         try {
             // console.log(resolvedBets.length);
             if (resolvedBets.length > 0) {
-                var jsonResolvedBets = JSON.parse(await fs.readFile(`${__dirname}/../../../resolvedBets.json`));
+                var jsonResolvedBets = JSON.parse(await fs.readFile(this.resolvedBetsPath));
                 jsonResolvedBets = jsonResolvedBets.concat(resolvedBets);
-                await fs.writeFile(`${__dirname}/../../../resolvedBets.json`, JSON.stringify(jsonResolvedBets, null, 2))
+                await fs.writeFile(this.resolvedBetsPath, JSON.stringify(jsonResolvedBets, null, 2))
                 await this.writeBetsToFile();
                 await this.writeUsersToFile();
             }
@@ -357,14 +384,14 @@ class UFC extends EventEmitter {
 
     async loadFromFile(filePath) {
         try {
-            if (!filePath) filePath = `${__dirname}/../../../matchData.json`;
-            var matchData = JSON.parse(file.readFileSync(filePath));
-            var data = await UFC.parseMatchDataJson(matchData);
+            if (!filePath) filePath = this.matchDataPath;
+            var matchData = JSON.parse(await fs.readFile(filePath));
+            var data = await this.parseMatchDataJson(matchData);
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
             console.log("Successfully read matchData.json for upComingMatches and previousMatches.");
-            await fs.writeFile(`${__dirname}/../../../previousMatches.json`, JSON.stringify(this.previousMatches, null, 2));
+            await fs.writeFile(this.previousMatchesPath, JSON.stringify(this.previousMatches, null, 2));
             return true;
         } catch (err) {
             console.log(err);
@@ -399,7 +426,7 @@ class UFC extends EventEmitter {
     async writeBetsToFile() {
         console.log("Write Bets To File");
         try {
-            await fs.writeFile(`${__dirname}/../../../bets.json`, JSON.stringify(this.outstandingBets, null, 2));
+            await fs.writeFile(this.betsPath, JSON.stringify(this.outstandingBets, null, 2));
             return true;
         } catch (err) {
             console.log(err);
@@ -410,7 +437,7 @@ class UFC extends EventEmitter {
     async writeUsersToFile() {
         console.log("Write Users To File");
         try {
-            await fs.writeFile(`${__dirname}/../../../users.json`, JSON.stringify(this.users, null, 2));
+            await fs.writeFile(this.usersPath, JSON.stringify(this.users, null, 2));
             return true;
         } catch (err) {
             console.log(err);
@@ -442,10 +469,11 @@ class UFC extends EventEmitter {
     /*
     Parses the matchData from the UFC json data that we receive. return it as {upcomingMatches, previousMatches} but previousMatches has ALL past saved matches.
     */
-    static async parseMatchDataJson(data) {
+    async parseMatchDataJson(data) {
         try {
             var upComingMatches = [];
-            var previousMatches = JSON.parse(await fs.readFile(`${__dirname}/../../../previousMatches.json`));
+            console.log(this.previousMatchesPath);
+            var previousMatches = JSON.parse(await fs.readFile(this.previousMatchesPath));
             if (data.matchups) {
                 for (var fight of data.matchups) {
                     try {
@@ -483,6 +511,9 @@ main();
 /*
 Test function
 */
+
+
+
 async function main() {
     var test = new UFC();
     // await test.loadFromFile();
@@ -508,7 +539,9 @@ async function main() {
     // await test.resolveBets();
     // await test.cancelBet("classic", john, null);
     // console.log(test.outstandingBets);
+    // console.log(await testAddUser());
 }
+
 
 
 module.exports = UFC;
