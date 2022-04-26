@@ -2,12 +2,13 @@ var axios = require("axios");
 var Bet = require("./Bet.js");
 var User = require("./User.js");
 var fs = require("fs").promises;
+const MongoClient = require('mongodb').MongoClient;
 
 const { EventEmitter } = require('events');
 
 
 class UFC extends EventEmitter {
-    constructor(users, upComingMatches, previousMatches, outstandingBets, lastRefreshed, usersPath = `${__dirname}/../../../users.json`, betsPath = `${__dirname}/../../../bets.json`, matchDataPath = `${__dirname}/../../../matchData.json`, previousMatchesPath = `${__dirname}/../../../previousMatches.json`, resolvedBetsPath = `${__dirname}/../../../resolvedBets.json`) {
+    constructor(databaseURI, users, upComingMatches, previousMatches, outstandingBets, lastRefreshed, usersPath = `${__dirname}/../../../users.json`, betsPath = `${__dirname}/../../../bets.json`, matchDataPath = `${__dirname}/../../../matchData.json`, previousMatchesPath = `${__dirname}/../../../previousMatches.json`, resolvedBetsPath = `${__dirname}/../../../resolvedBets.json`) {
         super();
         this.usersPath = usersPath;
         this.betsPath = betsPath;
@@ -20,15 +21,58 @@ class UFC extends EventEmitter {
         this.previousMatches = previousMatches; //List of previous matches
         this.outstandingBets = outstandingBets; //List of previous matches
         this.lastRefreshed = lastRefreshed; //Ex. Last time the upComingMatches was refreshed.  
+        this.databaseURI = databaseURI;
+        this.mongoDB;
+    }
 
+    async loadMongoDB(uri) {
+        const client = new MongoClient(uri, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
+        await client.connect();
+        this.mongoDB = await client.db();
+        return this.mongoDB;
+    }
+
+    async writeDatabase(document, data) {
+        const collection = await this.mongoDB.collection('userData');
+        const updateResult = await collection.updateOne({
+            _id: document
+        }, {
+            $set: {
+                users: JSON.stringify(data)
+            }
+        });
+        return updateResult;
+    }
+
+    async readDatabase(document) {
+        const collection = await this.mongoDB.collection('userData');
+        let data = await collection.find({
+            _id: document
+        }
+        )
+        let dataAr = await data.toArray()
+        let dataJson = JSON.parse(dataAr[0].users);
+        return dataJson;
     }
 
     async initialize() {
+        if (this.databaseURI) {
+            await this.loadMongoDB(this.databaseURI)
+        }
         if (!this.users) {
             try {
                 // "./node_modules/ufc-betting-game/utils/"
                 // var jsonUsers = JSON.parse(file.readFileSync(this.usersPath));
-                var jsonUsers = JSON.parse(await fs.readFile(this.usersPath, "utf-8"));
+                let jsonUsers;
+                if (this.databaseURI) {
+                    jsonUsers = await this.readDatabase("users.json");
+                } else {
+                    jsonUsers = JSON.parse(await fs.readFile(this.usersPath, "utf-8"));
+
+                }
                 this.users = jsonUsers;
                 console.log(`Successfully read users data from ${this.usersPath} for user data.`);
             } catch (err) {
@@ -41,8 +85,12 @@ class UFC extends EventEmitter {
         }
         if (!this.outstandingBets) {
             try {
-                var jsonBets = JSON.parse(await fs.readFile(this.betsPath, "utf-8"));
-                // var jsonBets = JSON.parse(file.readFileSync(this.betsPath));
+                let jsonBets;
+                if (this.databaseURI) {
+                    jsonBets = await this.readDatabase("bets.json");
+                } else {
+                    jsonBets = JSON.parse(await fs.readFile(this.betsPath, "utf-8"));
+                }
                 this.outstandingBets = jsonBets;
                 console.log(`Successfully read bets data from ${this.betsPath} for outstandingBets.`);
             } catch (err) {
@@ -87,8 +135,14 @@ class UFC extends EventEmitter {
             this.upComingMatches = data.upComingMatches;
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
-            await fs.writeFile(this.matchDataPath, JSON.stringify(response.data, null, 2));
-            await fs.writeFile(this.previousMatchesPath, JSON.stringify(this.previousMatches, null, 2));
+            if (this.databaseURI) {
+                await this.writeDatabase("matchData.json", response.data);
+                await this.writeDatabase("previousMatches.json", this.previousMatches);
+            } else {
+                await fs.writeFile(this.matchDataPath, JSON.stringify(response.data, null, 2));
+                await fs.writeFile(this.previousMatchesPath, JSON.stringify(this.previousMatches, null, 2));
+            }
+
             return true;
         } catch (err) {
             console.log(err);
@@ -268,7 +322,7 @@ class UFC extends EventEmitter {
         for (var bet of this.outstandingBets) {
             if (Date.now() > bet.fightEventDate) { //If we passed the bets fight date. Then we want to check the completion of the fight
                 var fight = this.previousMatches.find(m => m.event_id == bet.fightEventID);
-                    if (fight) {
+                if (fight) {
                     var winnerID = null;
                     var loserID = null;
                     switch (bet.betType) {
@@ -383,9 +437,19 @@ class UFC extends EventEmitter {
         try {
             // console.log(resolvedBets.length);
             if (resolvedBets.length > 0) {
-                var jsonResolvedBets = JSON.parse(await fs.readFile(this.resolvedBetsPath));
+                let jsonResolvedBets;
+
+                if (this.databaseURI) {
+                    jsonResolvedBets = await this.readDatabase("resolvedBets.json");
+                } else {
+                    jsonResolvedBets = JSON.parse(await fs.readFile(this.resolvedBetsPath, "utf-8"));
+                }
                 jsonResolvedBets = jsonResolvedBets.concat(resolvedBets);
-                await fs.writeFile(this.resolvedBetsPath, JSON.stringify(jsonResolvedBets, null, 2))
+                if (this.databaseURI) {
+                    await this.writeDatabase("resolvedBets.json", jsonResolvedBets);
+                } else {
+                    await fs.writeFile(this.resolvedBetsPath, JSON.stringify(jsonResolvedBets, null, 2))
+                }
                 await this.writeBetsToFile();
                 await this.writeUsersToFile();
             }
@@ -424,7 +488,11 @@ class UFC extends EventEmitter {
             this.previousMatches = data.previousMatches;
             this.lastRefreshed = Date.now();
             console.log("Successfully read matchData.json for upComingMatches and previousMatches.");
-            await fs.writeFile(this.previousMatchesPath, JSON.stringify(this.previousMatches, null, 2));
+            if (this.databaseURI) {
+                await this.writeDatabase("previousMatches.json", this.previousMatches);
+            } else {
+                await fs.writeFile(this.previousMatchesPath, JSON.stringify(this.previousMatches, null, 2));
+            }
             return true;
         } catch (err) {
             console.log(err);
@@ -459,7 +527,11 @@ class UFC extends EventEmitter {
     async writeBetsToFile() {
         console.log("Write Bets To File");
         try {
-            await fs.writeFile(this.betsPath, JSON.stringify(this.outstandingBets, null, 2));
+            if (this.databaseURI) {
+                await this.writeDatabase("bets.json", this.outstandingBets);
+            } else {
+                await fs.writeFile(this.betsPath, JSON.stringify(this.outstandingBets, null, 2));
+            }
             return true;
         } catch (err) {
             console.log(err);
@@ -470,7 +542,11 @@ class UFC extends EventEmitter {
     async writeUsersToFile() {
         console.log("Write Users To File");
         try {
-            await fs.writeFile(this.usersPath, JSON.stringify(this.users, null, 2));
+            if (this.databaseURI) {
+                await this.writeDatabase("users.json", this.users);
+            } else {
+                await fs.writeFile(this.usersPath, JSON.stringify(this.users, null, 2));
+            }
             return true;
         } catch (err) {
             console.log(err);
@@ -505,7 +581,14 @@ class UFC extends EventEmitter {
     async parseMatchDataJson(data) {
         try {
             var upComingMatches = [];
-            var previousMatches = JSON.parse(await fs.readFile(this.previousMatchesPath));
+
+            let previousMatches;
+            if (this.databaseURI) {
+                previousMatches = await this.readDatabase("previousMatches.json");
+            } else {
+                previousMatches = JSON.parse(await fs.readFile(this.previousMatchesPath));
+            }
+
             if (data.matchups) {
                 for (var fight of data.matchups) {
                     try {
@@ -551,7 +634,6 @@ async function main() {
     // await test.loadFromFile();
     // await test.refreshUpComingMatches();
     // await test.resolveBets();
-
     // console.log(test.previousMatches)
     // console.log(test.upComingMatches.length);
     // console.log(test.previousMatches.length);
