@@ -556,7 +556,7 @@ Test function
 
 
 async function main() {
-    var test = new UFC();
+    // var test = new UFC();
     // await test.loadFromFile();
     // await test.refreshUpComingMatches();
     // await test.resolveBets();
